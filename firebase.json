@@ -1,0 +1,28 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "project-cuoi-ky-595c4",
+          "appId": "1:395193582854:android:7e9575324301f94aa54a87",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "project-cuoi-ky-595c4",
+          "configurations": {
+            "android": "1:395193582854:android:7e9575324301f94aa54a87",
+            "ios": "1:395193582854:ios:d26f20806b8d6feca54a87",
+            "macos": "1:395193582854:ios:d26f20806b8d6feca54a87",
+            "web": "1:395193582854:web:16a872c4c92b77d3a54a87",
+            "windows": "1:395193582854:web:d8f97d39b2088b3ba54a87"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  }
+}

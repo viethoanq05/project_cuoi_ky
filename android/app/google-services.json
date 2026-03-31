@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "395193582854",
+    "project_id": "project-cuoi-ky-595c4",
+    "storage_bucket": "project-cuoi-ky-595c4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:395193582854:android:7e9575324301f94aa54a87",
+        "android_client_info": {
+          "package_name": "com.example.project_cuoi_ky"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCSzekLKopYLaWKOjITYsjAfKgMKtiOBOs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

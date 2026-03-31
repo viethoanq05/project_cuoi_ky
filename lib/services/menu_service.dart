@@ -1,0 +1,233 @@
+import 'dart:typed_data';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../models/food_item.dart';
+
+class MenuService {
+  MenuService._();
+
+  static final MenuService instance = MenuService._();
+
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  static const String _foodsCollection = 'Foods';
+  static const String _categoriesCollection = 'Categories';
+  static const String _storageBucket = String.fromEnvironment(
+    'SUPABASE_STORAGE_BUCKET',
+    defaultValue: 'food-images',
+  );
+
+  String? get currentStoreId => _auth.currentUser?.uid;
+
+  Stream<List<MenuCategory>> watchCategories() {
+    return _firestore.collection(_categoriesCollection).snapshots().map((
+      snapshot,
+    ) {
+      final items = snapshot.docs
+          .map((doc) => MenuCategory.fromMap(doc.data(), doc.id))
+          .toList();
+      items.sort(
+        (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+      );
+      return items;
+    });
+  }
+
+  Stream<List<FoodItem>> watchCurrentStoreFoods() {
+    final storeId = currentStoreId;
+    if (storeId == null || storeId.isEmpty) {
+      return const Stream<List<FoodItem>>.empty();
+    }
+
+    return _firestore
+        .collection(_foodsCollection)
+        .where('store_id', isEqualTo: storeId)
+        .snapshots()
+        .map((snapshot) {
+          final items = snapshot.docs
+              .map((doc) => FoodItem.fromMap(doc.data(), docId: doc.id))
+              .toList();
+          items.sort(
+            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+          );
+          return items;
+        });
+  }
+
+  Future<String?> createFood({
+    required String name,
+    required String description,
+    required String categoryId,
+    required String image,
+    required num price,
+    required Map<String, dynamic> options,
+    required bool isAvailable,
+  }) async {
+    final storeId = currentStoreId;
+    if (storeId == null || storeId.isEmpty) {
+      return 'Ban chua dang nhap.';
+    }
+
+    try {
+      final docRef = _firestore.collection(_foodsCollection).doc();
+      final food = FoodItem(
+        foodId: docRef.id,
+        storeId: storeId,
+        name: name.trim(),
+        description: description.trim(),
+        categoryId: categoryId.trim(),
+        image: image.trim(),
+        price: price,
+        isAvailable: isAvailable,
+        options: _sanitizeOptions(options),
+        avgRating: 0,
+        totalRatings: 0,
+      );
+
+      await docRef.set(<String, dynamic>{
+        ...food.toMap(),
+        'created_at': FieldValue.serverTimestamp(),
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+
+      return null;
+    } on FirebaseException catch (e) {
+      return _errorMessage(e);
+    } catch (e) {
+      return 'Khong tao duoc mon an: $e';
+    }
+  }
+
+  Future<String?> updateFood(FoodItem item) async {
+    final storeId = currentStoreId;
+    if (storeId == null || storeId.isEmpty) {
+      return 'Ban chua dang nhap.';
+    }
+
+    if (item.storeId != storeId) {
+      return 'Ban khong co quyen sua mon an nay.';
+    }
+
+    try {
+      await _firestore
+          .collection(_foodsCollection)
+          .doc(item.foodId)
+          .set(<String, dynamic>{
+            ...item.copyWith(options: _sanitizeOptions(item.options)).toMap(),
+            'updated_at': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+      return null;
+    } on FirebaseException catch (e) {
+      return _errorMessage(e);
+    } catch (e) {
+      return 'Khong cap nhat duoc mon an: $e';
+    }
+  }
+
+  Future<String?> toggleAvailability(FoodItem item, bool value) async {
+    final updated = item.copyWith(isAvailable: value);
+    return updateFood(updated);
+  }
+
+  Future<String?> deleteFood(FoodItem item) async {
+    final storeId = currentStoreId;
+    if (storeId == null || storeId.isEmpty) {
+      return 'Ban chua dang nhap.';
+    }
+
+    if (item.storeId != storeId) {
+      return 'Ban khong co quyen xoa mon an nay.';
+    }
+
+    try {
+      await _firestore.collection(_foodsCollection).doc(item.foodId).delete();
+      return null;
+    } on FirebaseException catch (e) {
+      return _errorMessage(e);
+    } catch (e) {
+      return 'Khong xoa duoc mon an: $e';
+    }
+  }
+
+  Future<String> uploadFoodImage({
+    required Uint8List bytes,
+    required String fileName,
+  }) async {
+    final storeId = currentStoreId;
+    if (storeId == null || storeId.isEmpty) {
+      throw Exception('Ban chua dang nhap.');
+    }
+
+    if (!Supabase.instance.isInitialized) {
+      throw StateError(
+        'Supabase chua duoc khoi tao. Kiem tra `main()` da goi Supabase.initialize() '
+        'va app duoc chay voi --dart-define=SUPABASE_URL=... va --dart-define=SUPABASE_ANON_KEY=....',
+      );
+    }
+
+    final SupabaseClient supabase = Supabase.instance.client;
+
+    final safeName = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+    final path =
+        'foods/$storeId/${DateTime.now().millisecondsSinceEpoch}_$safeName';
+
+    await supabase.storage
+        .from(_storageBucket)
+        .uploadBinary(
+          path,
+          bytes,
+          fileOptions: const FileOptions(upsert: true),
+        );
+
+    return supabase.storage.from(_storageBucket).getPublicUrl(path);
+  }
+
+  Map<String, dynamic> _sanitizeOptions(Map<String, dynamic> source) {
+    final rawSize = (source['size']?.toString() ?? 'M').toUpperCase();
+    final size = ['S', 'M', 'L'].contains(rawSize) ? rawSize : 'M';
+    return <String, dynamic>{'size': size};
+  }
+
+  String _errorMessage(FirebaseException e) {
+    switch (e.code) {
+      case 'permission-denied':
+        return 'Khong co quyen thao tac menu (permission-denied).';
+      case 'unavailable':
+        return 'He thong tam thoi khong kha dung, vui long thu lai.';
+      default:
+        return 'Firestore error (${e.code}): ${e.message ?? 'unknown'}';
+    }
+  }
+}
+
+class MenuCategory {
+  const MenuCategory({required this.id, required this.name});
+
+  final String id;
+  final String name;
+
+  factory MenuCategory.fromMap(Map<String, dynamic> map, String docId) {
+    final resolvedName = _asText(map['name']).isNotEmpty
+        ? _asText(map['name'])
+        : (_asText(map['category_name']).isNotEmpty
+              ? _asText(map['category_name'])
+              : docId);
+
+    final resolvedId = _asText(map['category_id']).isNotEmpty
+        ? _asText(map['category_id'])
+        : (_asText(map['id']).isNotEmpty ? _asText(map['id']) : docId);
+
+    return MenuCategory(id: resolvedId, name: resolvedName);
+  }
+
+  static String _asText(dynamic value) {
+    if (value == null) {
+      return '';
+    }
+    return value.toString().trim();
+  }
+}

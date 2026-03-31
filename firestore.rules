@@ -1,0 +1,220 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function currentUserPath() {
+      return /databases/$(database)/documents/Users/$(request.auth.uid);
+    }
+
+    function currentRole() {
+      return signedIn() && exists(currentUserPath())
+        ? get(currentUserPath()).data.role
+        : null;
+    }
+
+    function isDriver() {
+      return currentRole() == 'Driver';
+    }
+
+    function isStore() {
+      return currentRole() == 'Store';
+    }
+
+    function isCustomer() {
+      return currentRole() == 'Customer';
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isValidRole(role) {
+      return role in ['Customer', 'Store', 'Driver'];
+    }
+
+    function hasCoreFields(data, uid) {
+      return data.user_id == uid
+        && data.user_name is string
+        && data.user_name.size() >= 3
+        && data.email is string
+        && data.role is string
+        && isValidRole(data.role);
+    }
+
+    function hasValidRoleInfo(data) {
+      return (
+        data.role == 'Driver'
+          ? data.driver_info is map && !('store_info' in data)
+          : data.role == 'Store'
+            ? hasValidStoreInfo(data.store_info) && !('driver_info' in data)
+            : !('driver_info' in data) && !('store_info' in data)
+      );
+    }
+
+    function hasValidStoreInfo(storeInfo) {
+      return storeInfo is list
+        && storeInfo.size() > 0
+        && storeInfo[0] is map
+        && storeInfo[0].is_open is bool
+        && storeInfo[0].rating is number;
+    }
+
+    function isStoreUser(uid) {
+      return signedIn()
+        && request.auth.uid == uid
+        && exists(/databases/$(database)/documents/Users/$(uid))
+        && get(/databases/$(database)/documents/Users/$(uid)).data.role == 'Store';
+    }
+
+    function isValidFoodShape(data, foodId) {
+      return data.food_id == foodId
+        && data.store_id == request.auth.uid
+        && data.name is string
+        && data.description is string
+        && data.category_id is string
+        && data.image is string
+        && data.price is number
+        && data.is_available is bool
+        && data.options is map
+        && data.options.size is string
+        && data.options.size in ['S', 'M', 'L']
+        && data.avg_rating is number
+        && data.total_ratings is int;
+    }
+
+    match /Users/{uid} {
+      allow read: if isOwner(uid);
+
+      allow create: if isOwner(uid)
+        && hasCoreFields(request.resource.data, uid)
+        && request.resource.data.created_at is timestamp
+        && hasValidRoleInfo(request.resource.data);
+
+      allow update: if isOwner(uid)
+        && hasCoreFields(request.resource.data, uid)
+        && hasValidRoleInfo(request.resource.data);
+
+      allow delete: if false;
+    }
+
+    match /Usernames/{userNameNorm} {
+      allow read: if true;
+
+      allow create: if signedIn()
+        && !exists(/databases/$(database)/documents/Usernames/$(userNameNorm))
+        && request.resource.data.user_id == request.auth.uid
+        && request.resource.data.user_name_norm == userNameNorm
+        && request.resource.data.user_name is string
+        && request.resource.data.user_name.size() >= 3
+        && request.resource.data.email is string;
+
+      allow update: if signedIn()
+        && resource.data.user_id == request.auth.uid
+        && request.resource.data.user_id == request.auth.uid
+        && request.resource.data.user_name_norm == userNameNorm
+        && request.resource.data.user_name is string
+        && request.resource.data.user_name.size() >= 3
+        && request.resource.data.email is string;
+
+      allow delete: if false;
+    }
+
+    match /Foods/{foodId} {
+      allow read: if true;
+
+      allow create: if signedIn()
+        && isStoreUser(request.auth.uid)
+        && isValidFoodShape(request.resource.data, foodId);
+
+      allow update: if signedIn()
+        && isStoreUser(request.auth.uid)
+        && resource.data.store_id == request.auth.uid
+        && isValidFoodShape(request.resource.data, foodId);
+
+      allow delete: if signedIn()
+        && isStoreUser(request.auth.uid)
+        && resource.data.store_id == request.auth.uid;
+    }
+
+    match /Categories/{categoryId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Orders: minimal rules to support driver flow (view finding orders + accept).
+    // NOTE: This rule intentionally avoids enforcing a full order schema because
+    // the app code may evolve. It focuses on protecting ownership and preventing
+    // drivers from mutating arbitrary fields.
+    match /Orders/{orderId} {
+      function isFindingStatus(status) {
+        return status in ['dang_tim_xe', 'finding_driver', 'Searching', 'searching'];
+      }
+
+      function effectiveStatus(order) {
+        return ('order_status' in order) ? order.order_status : order.status;
+      }
+
+      function requestedStatus(order) {
+        return ('order_status' in order) ? order.order_status : order.status;
+      }
+
+      function hasNoDriverAssigned(data) {
+        return !('driver_id' in data) || data.driver_id == '' || data.driver_id == null;
+      }
+
+      function canDriverSee(order) {
+        return isDriver() && (
+          // See open orders while finding drivers.
+          (isFindingStatus(effectiveStatus(order)) && hasNoDriverAssigned(order))
+          // Or see orders already assigned to this driver.
+          || ('driver_id' in order && order.driver_id == request.auth.uid)
+        );
+      }
+
+      function canStoreSee(order) {
+        return isStore() && ('store_id' in order) && order.store_id == request.auth.uid;
+      }
+
+      function canCustomerSee(order) {
+        return isCustomer() && (
+          (('customer_id' in order) && order.customer_id == request.auth.uid)
+          || (('user_id' in order) && order.user_id == request.auth.uid)
+        );
+      }
+
+      function canDriverAcceptOrder() {
+        let current = effectiveStatus(resource.data);
+        let next = requestedStatus(request.resource.data);
+        return isDriver()
+          && isFindingStatus(current)
+          && hasNoDriverAssigned(resource.data)
+          && request.resource.data.driver_id == request.auth.uid
+          && (next in ['dang_chuan_bi', 'Preparing'])
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'status',
+            'order_status',
+            'driver_id',
+            'driver_name',
+            'accepted_at',
+            'updated_at'
+          ])
+          && (!('accepted_at' in request.resource.data) || request.resource.data.accepted_at is timestamp)
+          && (!('updated_at' in request.resource.data) || request.resource.data.updated_at is timestamp);
+      }
+
+      allow read: if signedIn() && (canDriverSee(resource.data) || canStoreSee(resource.data) || canCustomerSee(resource.data));
+
+      // Customer/store create/update flows are not implemented in code yet.
+      // Keep create denied by default.
+      allow create: if false;
+
+      // Allow only the driver-accept transition on finding orders.
+      allow update: if signedIn() && canDriverAcceptOrder();
+
+      allow delete: if false;
+    }
+  }
+}
