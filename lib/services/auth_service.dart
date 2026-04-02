@@ -217,7 +217,10 @@ class AuthService extends ChangeNotifier {
           .collection(_usersCollection)
           .doc(user.uid)
           .update(payload);
-      _updateCurrentUserLocal(address: address.trim(), position: pos);
+      _updateCurrentUserLocal(
+        address: address.trim(),
+        position: {'latitude': latitude, 'longitude': longitude},
+      );
       return null;
     } on FirebaseException catch (e) {
       return e.message ?? 'Khong the cap nhat vi tri.';
@@ -353,7 +356,7 @@ class AuthService extends ChangeNotifier {
     final address = _asTrimmedString(data?['address']).isNotEmpty
         ? _asTrimmedString(data?['address'])
         : _asTrimmedString(data?['location']);
-    final position = _asTrimmedString(data?['position']);
+    final position = _asPositionMap(data?['position']);
     final profileCompleted = _asBool(data?['profile_completed']);
 
     bool isStoreOpen = false;
@@ -464,7 +467,7 @@ class AuthService extends ChangeNotifier {
     String? fullName,
     String? phone,
     String? address,
-    String? position,
+    Map<String, double>? position,
     bool? profileCompleted,
     bool? isStoreOpen,
   }) {
@@ -588,6 +591,23 @@ class AuthService extends ChangeNotifier {
       return normalized == 'true' || normalized == '1';
     }
     return false;
+  }
+
+  Map<String, double>? _asPositionMap(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is Map<String, dynamic>) {
+      try {
+        return {
+          'latitude': (value['latitude'] is num) ? (value['latitude'] as num).toDouble() : double.parse(value['latitude'].toString()),
+          'longitude': (value['longitude'] is num) ? (value['longitude'] as num).toDouble() : double.parse(value['longitude'].toString()),
+        };
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
   }
 
   String _authErrorMessage(FirebaseAuthException e) {

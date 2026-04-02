@@ -19,7 +19,7 @@ class AppUser {
   final String fullName;
   final String phone;
   final String address;
-  final String position;
+  final Map<String, double>? position; // {latitude: double, longitude: double}
   final bool profileCompleted;
   final bool isStoreOpen;
 }

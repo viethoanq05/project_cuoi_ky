@@ -15,6 +15,7 @@ import '../services/auth_service.dart';
 import '../services/menu_service.dart';
 import '../widgets/food_grid_card.dart';
 import '../widgets/store_status_card.dart';
+import 'customer_home_screen.dart';
 import 'food_editor_screen.dart';
 
 class RoleHomeScreen extends StatefulWidget {
@@ -1468,6 +1469,10 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
 
     if (user.role == UserRole.driver) {
       return _buildDriverHome(user);
+    }
+
+    if (user.role == UserRole.customer) {
+      return CustomerHomeScreen(authService: widget.authService);
     }
 
     final info = roleInfo(user.role);
