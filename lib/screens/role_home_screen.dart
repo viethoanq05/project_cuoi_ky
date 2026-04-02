@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -6,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
 import '../models/app_user.dart';
@@ -13,6 +15,7 @@ import '../models/food_item.dart';
 import '../models/user_role.dart';
 import '../services/auth_service.dart';
 import '../services/menu_service.dart';
+import 'store_management/store_management_screen.dart';
 import '../widgets/food_grid_card.dart';
 import '../widgets/store_status_card.dart';
 import 'food_editor_screen.dart';
@@ -71,14 +74,170 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
   @override
   void initState() {
     super.initState();
-    final existingLocation =
+    final existingAddress =
         widget.authService.currentUser?.address.trim() ?? '';
-    if (existingLocation.isNotEmpty) {
-      _currentAddress = existingLocation;
+    if (existingAddress.isNotEmpty && !_isCoordinateText(existingAddress)) {
+      _currentAddress = existingAddress;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_hydrateAddressFromStoredCoordinates());
       _bootstrapAfterFirstFrame();
     });
+  }
+
+  Future<void> _hydrateAddressFromStoredCoordinates() async {
+    final user = widget.authService.currentUser;
+    if (user == null) {
+      return;
+    }
+
+    final sourceText = _isCoordinateText(user.address)
+        ? user.address
+        : user.position;
+    final parsed = _parseCoordinateText(sourceText);
+    if (parsed == null) {
+      return;
+    }
+
+    final lat = parsed.$1;
+    final lng = parsed.$2;
+    final resolvedAddress = await _reverseGeocodeAddress(lat, lng);
+    if (!mounted || resolvedAddress == null || resolvedAddress.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _currentAddress = resolvedAddress;
+      _currentLatLng = LatLng(lat, lng);
+    });
+
+    await widget.authService.updateCurrentLocationInfo(
+      address: resolvedAddress,
+      latitude: lat,
+      longitude: lng,
+    );
+  }
+
+  bool _isCoordinateText(String value) {
+    return RegExp(
+      r'^\s*\[[+-]?\d+(?:\.\d+)?\s*[NS]\s*,\s*[+-]?\d+(?:\.\d+)?\s*[EW]\]\s*$',
+      caseSensitive: false,
+    ).hasMatch(value.trim());
+  }
+
+  (double, double)? _parseCoordinateText(String value) {
+    final match = RegExp(
+      r'^\s*\[\s*([+-]?\d+(?:\.\d+)?)\s*([NS])\s*,\s*([+-]?\d+(?:\.\d+)?)\s*([EW])\s*\]\s*$',
+      caseSensitive: false,
+    ).firstMatch(value.trim());
+    if (match == null) {
+      return null;
+    }
+
+    final latRaw = double.tryParse(match.group(1) ?? '');
+    final latDir = (match.group(2) ?? 'N').toUpperCase();
+    final lngRaw = double.tryParse(match.group(3) ?? '');
+    final lngDir = (match.group(4) ?? 'E').toUpperCase();
+    if (latRaw == null || lngRaw == null) {
+      return null;
+    }
+
+    final lat = latDir == 'S' ? -latRaw.abs() : latRaw.abs();
+    final lng = lngDir == 'W' ? -lngRaw.abs() : lngRaw.abs();
+    return (lat, lng);
+  }
+
+  Future<String?> _reverseGeocodeAddress(double lat, double lng) async {
+    try {
+      final placemarks = await placemarkFromCoordinates(
+        lat,
+        lng,
+      ).timeout(const Duration(seconds: 8));
+      if (placemarks.isEmpty) {
+        return null;
+      }
+
+      final p = placemarks.first;
+      final parts = <String>[
+        if ((p.street ?? '').trim().isNotEmpty) p.street!.trim(),
+        if ((p.subLocality ?? '').trim().isNotEmpty) p.subLocality!.trim(),
+        if ((p.locality ?? '').trim().isNotEmpty) p.locality!.trim(),
+        if ((p.administrativeArea ?? '').trim().isNotEmpty)
+          p.administrativeArea!.trim(),
+      ];
+
+      if (parts.isEmpty) {
+        return null;
+      }
+
+      return parts.toSet().join(', ');
+    } catch (_) {
+      return _reverseGeocodeFromNominatim(lat, lng);
+    }
+  }
+
+  Future<String?> _reverseGeocodeFromNominatim(double lat, double lng) async {
+    try {
+      final uri = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=$lat&lon=$lng&accept-language=vi',
+      );
+      final response = await http
+          .get(uri, headers: <String, String>{'Accept': 'application/json'})
+          .timeout(const Duration(seconds: 8));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return null;
+      }
+
+      final body = jsonDecode(response.body);
+      if (body is! Map<String, dynamic>) {
+        return null;
+      }
+
+      final address = body['address'];
+      if (address is Map<String, dynamic>) {
+        final parts = <String>[
+          if ((address['house_number'] ?? '').toString().trim().isNotEmpty)
+            (address['house_number'] ?? '').toString().trim(),
+          if ((address['road'] ?? '').toString().trim().isNotEmpty)
+            (address['road'] ?? '').toString().trim(),
+          if ((address['suburb'] ?? '').toString().trim().isNotEmpty)
+            (address['suburb'] ?? '').toString().trim(),
+          if ((address['city_district'] ?? '').toString().trim().isNotEmpty)
+            (address['city_district'] ?? '').toString().trim(),
+          if ((address['city'] ?? '').toString().trim().isNotEmpty)
+            (address['city'] ?? '').toString().trim(),
+          if ((address['state'] ?? '').toString().trim().isNotEmpty)
+            (address['state'] ?? '').toString().trim(),
+        ];
+        if (parts.isNotEmpty) {
+          return parts.toSet().join(', ');
+        }
+      }
+
+      final displayName = (body['display_name'] ?? '').toString().trim();
+      if (displayName.isEmpty) {
+        return null;
+      }
+      final segments = displayName
+          .split(',')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+      if (segments.isEmpty) {
+        return null;
+      }
+      return segments.take(4).join(', ');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _addressForDisplay(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty || _isCoordinateText(trimmed)) {
+      return 'Chưa cập nhật địa chỉ';
+    }
+    return trimmed;
   }
 
   Future<void> _bootstrapAfterFirstFrame() async {
@@ -148,7 +307,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Luu thong tin that bai: $e')));
+        ).showSnackBar(SnackBar(content: Text('Lưu thông tin thất bại: $e')));
       }
     } finally {
       _checkingProfile = false;
@@ -192,31 +351,11 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
         ),
       ).timeout(const Duration(seconds: 12));
 
-      List<Placemark> placemarks = const <Placemark>[];
-      try {
-        placemarks = await placemarkFromCoordinates(
-          position.latitude,
-          position.longitude,
-        ).timeout(const Duration(seconds: 8));
-      } catch (_) {
-        // Keep coordinate fallback if reverse geocoding is slow/unavailable.
-      }
-
-      String address =
-          '[${position.latitude.toStringAsFixed(5)} N, ${position.longitude.toStringAsFixed(5)} E]';
-      if (placemarks.isNotEmpty) {
-        final p = placemarks.first;
-        final parts = <String>[
-          if ((p.street ?? '').isNotEmpty) p.street!,
-          if ((p.subAdministrativeArea ?? '').isNotEmpty)
-            p.subAdministrativeArea!,
-          if ((p.administrativeArea ?? '').isNotEmpty) p.administrativeArea!,
-          if ((p.country ?? '').isNotEmpty) p.country!,
-        ];
-        if (parts.isNotEmpty) {
-          address = parts.join(', ');
-        }
-      }
+      final address =
+          await _reverseGeocodeAddress(position.latitude, position.longitude) ??
+          (_isCoordinateText(_currentAddress) || _currentAddress.trim().isEmpty
+              ? 'Chưa cập nhật địa chỉ'
+              : _currentAddress);
 
       if (!mounted) {
         return;
@@ -243,7 +382,6 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
       }
       setState(() {
         _locationError = 'Lay vi tri qua lau, vui long thu lai.';
-        _currentAddress = 'Khong lay duoc vi tri hien tai';
       });
     } catch (e) {
       if (!mounted) {
@@ -251,7 +389,6 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
       }
       setState(() {
         _locationError = e.toString();
-        _currentAddress = 'Khong lay duoc vi tri hien tai';
       });
     } finally {
       if (mounted) {
@@ -283,6 +420,12 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
       MaterialPageRoute<void>(
         builder: (_) => FoodEditorScreen(menuService: _menuService),
       ),
+    );
+  }
+
+  Future<void> _openStoreManagementScreen() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const StoreManagementScreen()),
     );
   }
 
@@ -1229,9 +1372,9 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Cua hang', style: Theme.of(context).textTheme.labelMedium),
+            Text('Cửa hàng', style: Theme.of(context).textTheme.labelMedium),
             Text(
-              _currentAddress,
+              _addressForDisplay(_currentAddress),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.titleSmall,
@@ -1240,21 +1383,26 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
         ),
         actions: [
           IconButton(
+            onPressed: _openStoreManagementScreen,
+            icon: const Icon(Icons.space_dashboard_outlined),
+            tooltip: 'Quản lý cửa hàng',
+          ),
+          IconButton(
             onPressed: _loadingLocation ? null : _loadCurrentLocation,
             icon: const Icon(Icons.refresh),
-            tooltip: 'Cap nhat dia chi',
+            tooltip: 'Cập nhật địa chỉ',
           ),
           IconButton(
             onPressed: widget.authService.logout,
             icon: const Icon(Icons.logout_rounded),
-            tooltip: 'Dang xuat',
+            tooltip: 'Đăng xuất',
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openCreateFoodScreen,
         icon: const Icon(Icons.add),
-        label: const Text('Them mon'),
+        label: const Text('Thêm món'),
       ),
       body: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -1292,7 +1440,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Xin chao, $storeName',
+                          'Xin chào, $storeName',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.titleLarge
@@ -1303,7 +1451,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Quan ly menu cua ban nhanh hon',
+                          'Quản lý menu của bạn nhanh hơn',
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(
                                 color: Colors.white.withValues(alpha: 0.9),
@@ -1343,7 +1491,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
             ],
             const SizedBox(height: 12),
             Text(
-              'Danh sach mon an',
+              'Danh sách món ăn',
               style: Theme.of(
                 context,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
@@ -1364,7 +1512,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
                     builder: (context, foodSnapshot) {
                       if (foodSnapshot.hasError) {
                         return Center(
-                          child: Text('Loi tai menu: ${foodSnapshot.error}'),
+                          child: Text('Lỗi tải menu: ${foodSnapshot.error}'),
                         );
                       }
 
@@ -1394,12 +1542,12 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
                               ),
                               const SizedBox(height: 14),
                               Text(
-                                'Chua co mon an nao',
+                                'Chưa có món ăn nào',
                                 style: Theme.of(context).textTheme.titleMedium,
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                'Them mon dau tien de bat dau ban hang.',
+                                'Thêm món đầu tiên để bắt đầu bán hàng.',
                                 style: Theme.of(context).textTheme.bodyMedium,
                               ),
                             ],
@@ -1458,7 +1606,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
 
     if (user == null) {
       return const Scaffold(
-        body: Center(child: Text('Khong tim thay nguoi dung.')),
+        body: Center(child: Text('Không tìm thấy người dùng.')),
       );
     }
 
@@ -1479,7 +1627,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
           IconButton(
             onPressed: widget.authService.logout,
             icon: const Icon(Icons.logout_rounded),
-            tooltip: 'Dang xuat',
+            tooltip: 'Đăng xuất',
           ),
         ],
       ),
@@ -1491,7 +1639,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Xin chao: ${user.email}',
+                  'Xin chào: ${user.email}',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 12),
@@ -1502,7 +1650,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Quyen: ${user.role.label}',
+                          'Quyền: ${user.role.label}',
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
                         const SizedBox(height: 8),
@@ -1522,7 +1670,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
                           children: [
                             Expanded(
                               child: Text(
-                                'Dia chi hien tai: $_currentAddress',
+                                'Địa chỉ hiện tại: ${_addressForDisplay(_currentAddress)}',
                                 style: Theme.of(context).textTheme.bodyMedium,
                               ),
                             ),
@@ -1531,7 +1679,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
                                   ? null
                                   : _loadCurrentLocation,
                               icon: const Icon(Icons.refresh),
-                              tooltip: 'Cap nhat vi tri',
+                              tooltip: 'Cập nhật vị trí',
                             ),
                           ],
                         ),
