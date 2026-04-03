@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../models/cart_item.dart';
 
@@ -13,6 +15,40 @@ class CartService extends ChangeNotifier {
 
   final Map<String, CartItem> _cartItems = {};
   String? _currentStoreId;
+  static const String _prefKey = 'shopping_cart_items';
+
+  Future<void> loadFromPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cartJson = prefs.getString(_prefKey);
+      if (cartJson != null) {
+        final Map<String, dynamic> decoded = json.decode(cartJson);
+        _cartItems.clear();
+        decoded.forEach((key, value) {
+          _cartItems[key] = CartItem.fromMap(value as Map<String, dynamic>);
+        });
+        if (_cartItems.isNotEmpty) {
+          _currentStoreId = _cartItems.values.first.storeId;
+        }
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error loading cart from prefs: $e');
+    }
+  }
+
+  Future<void> _saveToPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final Map<String, dynamic> cartData = {};
+      _cartItems.forEach((key, value) {
+        cartData[key] = value.toMap();
+      });
+      await prefs.setString(_prefKey, json.encode(cartData));
+    } catch (e) {
+      debugPrint('Error saving cart to prefs: $e');
+    }
+  }
 
   // Getters
   List<CartItem> get items => _cartItems.values.toList();
@@ -39,7 +75,7 @@ class CartService extends ChangeNotifier {
     Map<String, String>? selectedOptions,
   }) {
     if (_currentStoreId != null && _currentStoreId != storeId) {
-      throw Exception('Giỏ hàng chỉ chấp nhận món từ một cửa hàng');
+      throw Exception('diff_store'); // Trả về mã lỗi cụ thể để UI xử lý
     }
 
     _currentStoreId = storeId;
@@ -65,6 +101,7 @@ class CartService extends ChangeNotifier {
       );
     }
 
+    _saveToPrefs();
     notifyListeners();
   }
 
@@ -82,6 +119,7 @@ class CartService extends ChangeNotifier {
 
     if (key.isNotEmpty && _cartItems.containsKey(key)) {
       _cartItems[key] = _cartItems[key]!.copyWith(quantity: newQuantity);
+      _saveToPrefs();
       notifyListeners();
     }
   }
@@ -100,6 +138,7 @@ class CartService extends ChangeNotifier {
         _currentStoreId = null;
       }
       
+      _saveToPrefs();
       notifyListeners();
     }
   }
@@ -108,6 +147,7 @@ class CartService extends ChangeNotifier {
   void clear() {
     _cartItems.clear();
     _currentStoreId = null;
+    _saveToPrefs();
     notifyListeners();
   }
 

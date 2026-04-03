@@ -6,6 +6,7 @@ import 'firebase_options.dart';
 import 'screens/login_screen.dart';
 import 'screens/role_home_screen.dart';
 import 'services/auth_service.dart';
+import 'services/cart_service.dart';
 import 'theme/app_theme.dart';
 
 Future<void> main() async {
@@ -24,6 +25,7 @@ Future<void> main() async {
   await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
 
   await AuthService.instance.init();
+  await CartService().loadFromPrefs();
   runApp(const MyApp());
 }
 
@@ -38,6 +40,7 @@ class MyApp extends StatelessWidget {
       animation: _authService,
       builder: (context, _) {
         return MaterialApp(
+          key: ValueKey(_authService.currentUser?.email ?? 'logged-out'),
           title: 'Project Cuoi Ky',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light,

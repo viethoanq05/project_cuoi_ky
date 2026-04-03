@@ -1,6 +1,5 @@
 import 'dart:math';
 import 'package:flutter/foundation.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../models/store_info.dart';
@@ -95,7 +94,7 @@ class RecommendationService {
   // Lấy dữ liệu thời tiết chi tiết từ OpenWeatherMap
   Future<WeatherData?> getWeatherData(double latitude, double longitude) async {
     try {
-      // Sử dụng OpenWeatherMap API (cần đăng ký)
+      // Sử dụng OpenWeatherMap API
       const apiKey = 'b704cff89bc96af48c452f7a03cc433d';
       final url =
           'https://api.openweathermap.org/data/2.5/weather?lat=$latitude&lon=$longitude&appid=$apiKey&units=metric&lang=vi';
@@ -131,14 +130,12 @@ class RecommendationService {
     try {
       if (foods.isEmpty || stores.isEmpty) return foods;
 
-      // 1. Tạo bản đồ ID cửa hàng -> Khoảng cách
       final Map<String, double> storeDistances = {};
       for (var store in stores) {
         final dist = _calculateDistance(userLat, userLon, store.latitude, store.longitude);
         storeDistances[store.storeId] = dist;
       }
 
-      // 2. Gán khoảng cách cho mỗi món ăn (nếu món đó có storeId) và lọc
       final List<MapEntry<FoodItem, double>> foodWithDistance = [];
       for (var food in foods) {
         if (storeDistances.containsKey(food.storeId)) {
@@ -146,21 +143,12 @@ class RecommendationService {
         }
       }
 
-      // 3. Sắp xếp theo khoảng cách tăng dần (gần nhất lên đầu)
       foodWithDistance.sort((a, b) => a.value.compareTo(b.value));
-
-      // 4. Trả về danh sách món ăn đã sắp xếp
       return foodWithDistance.map((e) => e.key).take(20).toList();
     } catch (e) {
       debugPrint('Error getting distance-based recommendations: $e');
       return foods.take(10).toList();
     }
-  }
-
-  // Deprecated: dùng getWeatherData thay thế
-  Future<String?> getWeatherCondition(double latitude, double longitude) async {
-    final data = await getWeatherData(latitude, longitude);
-    return data?.condition;
   }
 
   // Gợi ý cửa hàng dựa trên thời tiết
@@ -170,36 +158,20 @@ class RecommendationService {
     double userLon,
   ) async {
     try {
-      final weather = await getWeatherCondition(userLat, userLon);
+      final weatherData = await getWeatherData(userLat, userLon);
+      final weather = weatherData?.condition;
 
-      // Gợi ý dựa trên thời tiết
-      Map<String, List<String>> weatherCategories = {
-        'Rainy': ['Cơm', 'Nước nóng', 'Cháo', 'Súp'],
-        'Sunny': ['Nước uống', 'Kem', 'Salad', 'Trái cây'],
-        'Cloudy': ['Cơm', 'Mì', 'Bánh mì', 'Cà phê'],
-        'Cold': ['Cơm nóng', 'Súp', 'Nước nóng', 'Thịt nướng'],
-        'Hot': ['Nước đá', 'Sinh tố', 'Kem', 'Salad'],
-      };
-
-      final suggestions = weatherCategories[weather] ?? [];
-
-      // Sắp xếp cửa hàng dựa trên gợi ý thời tiết
       final scored = stores.map((store) {
         final distanceMetric =
             _calculateDistance(userLat, userLon, store.latitude, store.longitude);
-        final score = store.rating != null ? store.rating! * 2 : 0;
-        final distance = 5 / (distanceMetric + 1); // Cân bằng khoảng cách
-
         return store.copyWith(
           distance: distanceMetric,
           weatherCondition: weather,
         );
       }).toList();
 
-      // Sắp xếp theo đánh giá và khoảng cách
       scored.sort((a, b) {
-        final aScore =
-            (a.rating ?? 0) - (a.distance ?? 10) / 2; // Ưu tiên rating cao, gần
+        final aScore = (a.rating ?? 0) - (a.distance ?? 10) / 2;
         final bScore = (b.rating ?? 0) - (b.distance ?? 10) / 2;
         return bScore.compareTo(aScore);
       });
@@ -210,73 +182,96 @@ class RecommendationService {
     }
   }
 
-  // Gợi ý món ăn dựa trên dữ liệu thời tiết thực tế
+  // Gợi ý món ăn dựa trên thời tiết thực tế và thời gian trong ngày
   Future<List<FoodItem>> getWeatherBasedFoodRecommendations(
     List<FoodItem> foods,
-    WeatherData? weather,
-  ) async {
+    WeatherData? weather, {
+    DateTime? currentTime,
+  }) async {
     try {
-      if (weather == null) return foods.take(10).toList();
-
-      final condition = weather.condition;
-      final temp = weather.temp;
-
-      // Từ khóa gợi ý theo thời tiết và nhiệt độ
+      final now = currentTime ?? DateTime.now();
+      final hour = now.hour;
       final List<String> keywords = [];
 
-      if (condition == 'Rain' || condition == 'Drizzle' || condition == 'Thunderstorm') {
-        keywords.addAll(['cơm', 'súp', 'nóng', 'cháo', 'phở', 'bún']);
-      } else if (condition == 'Clear' || condition == 'Clouds') {
-        if (temp > 28) {
-          keywords.addAll(['đá', 'lạnh', 'nước', 'kem', 'sinh tố', 'salad', 'trà sữa']);
-        } else if (temp < 20) {
-          keywords.addAll(['nóng', 'cơm', 'nướng', 'lẩu']);
-        } else {
-          keywords.addAll(['bánh', 'mì', 'cà phê', 'trà', 'ăn vặt']);
+      // 1. Thêm từ khóa theo buổi
+      keywords.addAll(_getTimeBasedKeywords(hour));
+
+      // 2. Thêm từ khóa theo thời tiết
+      if (weather != null) {
+        final condition = weather.condition;
+        final temp = weather.temp;
+
+        if (condition == 'Rain' || condition == 'Drizzle' || condition == 'Thunderstorm' || condition == 'Squall' || condition == 'Tornado') {
+          keywords.addAll(['hot', 'soup', 'chao', 'pho', 'bun', 'lau', 'cay', 'nong']);
+        } else if (condition == 'Clear' || condition == 'Clouds' || condition == 'Mist' || condition == 'Haze' || condition == 'Fog') {
+          if (temp > 28) {
+            keywords.addAll(['da', 'lanh', 'nuoc', 'kem', 'sinh to', 'salad', 'tra sua', 'che']);
+          } else if (temp < 22) {
+            keywords.addAll(['nong', 'nuong', 'lau', 'cay', 'sot', 'ramen']);
+          }
         }
       }
 
+      // Chuẩn hóa và lọc món ăn
+      final normalizedKeywords = keywords.map((k) => _removeDiacritics(k.toLowerCase())).toSet().toList();
+      
       final recommended = foods.where((food) {
-        final name = (food.name).toLowerCase();
-        final description = (food.description).toLowerCase();
-        return keywords.any((keyword) =>
-            name.contains(keyword) || description.contains(keyword));
+        final name = _removeDiacritics(food.name.toLowerCase());
+        final desc = _removeDiacritics(food.description.toLowerCase());
+        return normalizedKeywords.any((k) => name.contains(k) || desc.contains(k));
       }).toList();
 
-      // Sắp xếp theo rating
-      recommended.sort((a, b) {
-        final bRating = b.avgRating;
-        final aRating = a.avgRating;
-        return bRating.compareTo(aRating);
-      });
+      // Fallback: nếu không khớp, lấy top món đánh giá cao
+      if (recommended.isEmpty && foods.isNotEmpty) {
+        final fallback = List<FoodItem>.from(foods);
+        fallback.sort((a, b) => b.avgRating.compareTo(a.avgRating));
+        return fallback.take(10).toList();
+      }
 
+      recommended.sort((a, b) => b.avgRating.compareTo(a.avgRating));
       return recommended.take(15).toList();
     } catch (e) {
       return foods.take(10).toList();
     }
   }
 
-  // Gợi ý dựa trên lịch sử đơn hàng (collaborative filtering đơn giản)
+  // Gợi ý dựa trên lịch sử đơn hàng
   Future<List<FoodItem>> getPersonalizedRecommendations(
     List<FoodItem> availableFoods,
     List<String> previousFoodIds,
   ) async {
     try {
-      // Lọc những món chưa gọi
       final untriedFoods = availableFoods
           .where((food) => !previousFoodIds.contains(food.foodId))
           .toList();
 
-      // Nếu có, sắp xếp theo rating
-      untriedFoods.sort((a, b) {
-        final aRating = a.avgRating ?? 0;
-        final bRating = b.avgRating ?? 0;
-        return bRating.compareTo(aRating);
-      });
-
+      untriedFoods.sort((a, b) => b.avgRating.compareTo(a.avgRating));
       return untriedFoods.take(10).toList();
     } catch (e) {
       return availableFoods;
     }
+  }
+
+  List<String> _getTimeBasedKeywords(int hour) {
+    if (hour >= 5 && hour < 10) {
+      return ['sang', 'bun', 'pho', 'xoi', 'banh mi', 'ca phe'];
+    } else if (hour >= 10 && hour < 14) {
+      return ['trua', 'com', 'van phong', 'bun dau', 'pho'];
+    } else if (hour >= 17 && hour < 22) {
+      return ['toi', 'lau', 'nuong', 'com', 'gia dinh'];
+    } else if (hour >= 22 || hour < 5) {
+      return ['dem', 'an vat', 'oc', 'hu tieu', 'tra sua'];
+    }
+    return ['ngon'];
+  }
+
+  String _removeDiacritics(String str) {
+    var withDiacritics = 'àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ';
+    var withoutDiacritics = 'aaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyyydAAAAAAAAAAAAAAAAAEEEEEEEEEEEIIIIIOOOOOOOOOOOOOOOOOUUUUUUUUUUUYYYYYD';
+    
+    for (int i = 0; i < withDiacritics.length; i++) {
+        str = str.replaceAll(withDiacritics[i], withoutDiacritics[i]);
+    }
+    return str;
   }
 }

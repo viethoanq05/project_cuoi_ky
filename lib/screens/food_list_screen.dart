@@ -39,43 +39,47 @@ class _FoodListScreenState extends State<FoodListScreen> {
         title: Text(widget.storeName),
         elevation: 0,
         actions: [
-          Stack(
-            alignment: Alignment.topRight,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.shopping_cart),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const CartScreen(),
-                    ),
-                  );
-                },
-              ),
-              if (_cartService.itemCount > 0)
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      color: AppColors.danger,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                    child: Text(
-                      '${_cartService.itemCount}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
+          ListenableBuilder(
+            listenable: _cartService,
+            builder: (context, _) => Stack(
+              alignment: Alignment.topRight,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.shopping_cart),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const CartScreen(),
                       ),
-                      textAlign: TextAlign.center,
+                    );
+                  },
+                ),
+                if (_cartService.itemCount > 0)
+                  Positioned(
+                    right: 8,
+                    top: 8,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: AppColors.danger,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      constraints:
+                          const BoxConstraints(minWidth: 18, minHeight: 18),
+                      child: Text(
+                        '${_cartService.itemCount}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -372,21 +376,31 @@ class _FoodListScreenState extends State<FoodListScreen> {
                 const SizedBox(height: 24),
                 ElevatedButton(
                   onPressed: () {
-                    _cartService.addItem(
-                      foodId: food.foodId,
-                      foodName: food.name,
-                      price: food.price.toDouble(),
-                      storeId: widget.storeId,
-                      storeName: widget.storeName,
-                      quantity: quantity,
-                    );
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Đã thêm vào giỏ hàng'),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
+                    try {
+                      _cartService.addItem(
+                        foodId: food.foodId,
+                        foodName: food.name,
+                        price: food.price.toDouble(),
+                        storeId: widget.storeId,
+                        storeName: widget.storeName,
+                        quantity: quantity,
+                      );
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Đã thêm vào giỏ hàng'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    } catch (e) {
+                      if (e.toString().contains('diff_store')) {
+                        _showClearCartDialog(food, quantity);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Lỗi: $e')),
+                        );
+                      }
+                    }
                   },
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 12),
@@ -405,6 +419,44 @@ class _FoodListScreenState extends State<FoodListScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  void _showClearCartDialog(FoodItem food, int quantity) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Đổi cửa hàng?'),
+        content: const Text(
+          'Giỏ hàng của bạn đang có món từ quán khác. Bạn có muốn xóa giỏ cũ để đặt món tại quán này không?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Bỏ qua'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context); // Đóng dialog
+              _cartService.clear();
+              _cartService.addItem(
+                foodId: food.foodId,
+                foodName: food.name,
+                price: food.price.toDouble(),
+                storeId: widget.storeId,
+                storeName: widget.storeName,
+                quantity: quantity,
+              );
+              Navigator.pop(this.context); // Đóng bottom sheet
+              ScaffoldMessenger.of(this.context).showSnackBar(
+                const SnackBar(content: Text('Đã xóa giỏ cũ và thêm món mới')),
+              );
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            child: const Text('Đồng ý', style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }

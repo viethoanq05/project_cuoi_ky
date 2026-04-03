@@ -352,11 +352,14 @@ class _BookingScreenState extends State<BookingScreen> {
       }
 
       final orderData = _cartService.toOrderMap();
+      final String storeName = _cartService.items.isNotEmpty
+          ? (_cartService.items.first.storeName ?? 'Cửa hàng')
+          : 'Cửa hàng';
 
       final OrderData order = await _orderService.createOrder(
         customerId: currentUser.email,
         storeId: orderData['storeId'],
-        storeName: 'Store',
+        storeName: storeName,
         items: orderData['items'],
         totalAmount: orderData['totalAmount'],
         deliveryFee: 0,

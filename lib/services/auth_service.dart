@@ -230,7 +230,20 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> logout() async {
-    await _auth.signOut();
+    try {
+      // 1. Xóa trạng thái cục bộ và thông báo ngay lập tức để UI nhảy về LoginScreen
+      _currentUser = null;
+      notifyListeners();
+
+      // 2. Hủy lắng nghe dữ liệu từ Firestore
+      await _userSubscription?.cancel();
+      _userSubscription = null;
+      
+      // 3. Đăng xuất khỏi Firebase (non-blocking để UI mượt hơn)
+      unawaited(_auth.signOut());
+    } catch (e) {
+      debugPrint('Error during logout: $e');
+    }
   }
 
   Future<String?> updateStoreOpenStatus(bool isOpen) async {
@@ -366,6 +379,7 @@ class AuthService extends ChangeNotifier {
     }
 
     return AppUser(
+      id: user.uid,
       email: user.email?.trim() ?? _asTrimmedString(data?['email']),
       role: UserRoleDisplay.fromKey(roleKey),
       userName: userName,
@@ -477,6 +491,7 @@ class AuthService extends ChangeNotifier {
     }
 
     _currentUser = AppUser(
+      id: existing.id,
       email: existing.email,
       role: existing.role,
       userName: existing.userName,

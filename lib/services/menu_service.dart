@@ -51,15 +51,15 @@ class MenuService {
     });
   }
 
-  Stream<List<FoodItem>> watchCurrentStoreFoods() {
-    final storeId = currentStoreId;
-    if (storeId == null || storeId.isEmpty) {
+  Stream<List<FoodItem>> watchCurrentStoreFoods({String? storeId}) {
+    final finalStoreId = storeId ?? currentStoreId;
+    if (finalStoreId == null || finalStoreId.isEmpty) {
       return const Stream<List<FoodItem>>.empty();
     }
 
     return _firestore
         .collection(_foodsCollection)
-        .where('store_id', isEqualTo: storeId)
+        .where('store_id', isEqualTo: finalStoreId)
         .snapshots()
         .map((snapshot) {
           final items = snapshot.docs
@@ -267,6 +267,8 @@ class MenuCategory {
 
   final String id;
   final String name;
+
+  String get categoryId => id;
 
   factory MenuCategory.fromMap(Map<String, dynamic> map, String docId) {
     final resolvedName = _asText(map['name']).isNotEmpty

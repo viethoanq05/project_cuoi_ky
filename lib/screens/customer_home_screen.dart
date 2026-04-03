@@ -14,6 +14,7 @@ import '../theme/app_colors.dart';
 import '../widgets/weather_widget.dart';
 import 'food_list_screen.dart';
 import 'search_filter_screen.dart';
+import 'cart_screen.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   final AuthService authService;
@@ -36,6 +37,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   List<FoodItem> _allDistanceSuggestions = []; // Raw data before filtering
   List<model.Category> _categories = [];
   WeatherData? _currentWeather;
+  List<FoodItem> _weatherRecommendations = [];
   bool _isLoading = true;
   String? _selectedCategory;
 
@@ -74,35 +76,50 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       }
 
       // 2. Chạy lấy các luồng dữ liệu song song (thời tiết, cửa hàng, món ăn)
-      final weatherFuture = _recommendationService.getWeatherData(lat, lon);
-      final allStoresFuture = SearchService().getAllStores();
-      final allFoodsFuture = _menuService.getAllFoods();
-
+      // Sử dụng catchError cho từng future để một tiến trình lỗi không làm dừng toàn bộ
       final results = await Future.wait([
-        weatherFuture,
-        allStoresFuture,
-        allFoodsFuture,
+        _recommendationService.getWeatherData(lat, lon).catchError((e) {
+          debugPrint('Error fetching weather: $e');
+          return null;
+        }),
+        SearchService().getAllStores().catchError((e) {
+          debugPrint('Error fetching stores: $e');
+          return <StoreInfo>[];
+        }),
+        _menuService.getAllFoods().catchError((e) {
+          debugPrint('Error fetching foods: $e');
+          return <FoodItem>[];
+        }),
+        CategoryService().getAllCategories().catchError((e) {
+          debugPrint('Error fetching categories: $e');
+          return <model.Category>[];
+        }),
       ]);
 
       final weather = results[0] as WeatherData?;
       final allStores = results[1] as List<StoreInfo>;
       final allFoods = results[2] as List<FoodItem>;
+      final categories = results[3] as List<model.Category>;
 
       // 3. Lấy gợi ý dựa trên dữ liệu đã tải
       final recommended = await _recommendationService.getWeatherBasedRecommendations(
         allStores,
         lat,
         lon,
-      );
+      ).catchError((e) => allStores);
 
       final foodSuggestions = await _recommendationService.getDistanceBasedFoodRecommendations(
         allFoods,
         allStores,
         lat,
         lon,
-      );
+      ).catchError((e) => allFoods.take(10).toList());
 
-      final categories = await CategoryService().getAllCategories();
+      final weatherRecommendations = await _recommendationService.getWeatherBasedFoodRecommendations(
+        allFoods,
+        weather,
+        currentTime: DateTime.now(),
+      ).catchError((e) => <FoodItem>[]);
 
       if (mounted) {
         setState(() {
@@ -110,14 +127,18 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           _stores = allStores;
           _recommendedStores = recommended;
           _allDistanceSuggestions = foodSuggestions;
+          _weatherRecommendations = weatherRecommendations;
           _categories = categories;
-          _applyFilters(); // Apply current filters to the new data
+          _applyFilters();
         });
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi tải dữ liệu: $e')),
+          SnackBar(
+            content: Text('Cảnh báo: Một số dữ liệu không thể tải đầy đủ ($e)'),
+            duration: const Duration(seconds: 5),
+          ),
         );
       }
     } finally {
@@ -186,6 +207,48 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               );
             },
           ),
+          ListenableBuilder(
+            listenable: CartService(),
+            builder: (context, _) => Stack(
+              alignment: Alignment.topRight,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.shopping_cart),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const CartScreen(),
+                      ),
+                    );
+                  },
+                ),
+                if (CartService().itemCount > 0)
+                  Positioned(
+                    right: 8,
+                    top: 8,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: AppColors.danger,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      constraints:
+                          const BoxConstraints(minWidth: 16, minHeight: 16),
+                      child: Text(
+                        '${CartService().itemCount}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: _showLogoutConfirmation,
@@ -223,6 +286,14 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                     weather: _currentWeather,
                     onRefresh: _loadData,
                   ),
+
+                  // Weather Recommendations
+                  if (_weatherRecommendations.isNotEmpty) ...[
+                    _buildWeatherFoodSuggestionsHeader(),
+                    const SizedBox(height: 12),
+                    _buildWeatherFoodSuggestions(),
+                    const SizedBox(height: 24),
+                  ],
 
                   // Danh mục gợi ý
                   _buildCategorySection(context),
@@ -582,6 +653,163 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     );
   }
 
+  Widget _buildWeatherFoodSuggestionsHeader() {
+    String title = 'Món ngon cho bạn';
+    IconData icon = Icons.recommend;
+    
+    if (_currentWeather != null) {
+      final condition = _currentWeather!.condition;
+      final temp = _currentWeather!.temp;
+      final hour = DateTime.now().hour;
+      
+      String timeStr = '';
+      if (hour >= 5 && hour < 10) timeStr = 'bữa sáng';
+      else if (hour >= 10 && hour < 15) timeStr = 'bữa trưa';
+      else if (hour >= 15 && hour < 18) timeStr = 'ăn chiều';
+      else if (hour >= 18 && hour < 22) timeStr = 'bữa tối';
+      else timeStr = 'ăn đêm';
+
+      if (condition == 'Rain' || condition == 'Drizzle' || condition == 'Thunderstorm') {
+        title = 'Ăn gì $timeStr ngày mưa?';
+        icon = Icons.umbrella;
+      } else if (temp > 28) {
+        title = 'Món $timeStr giải nhiệt';
+        icon = Icons.wb_sunny;
+      } else if (temp < 22) {
+        title = '$timeStr ấm nóng';
+        icon = Icons.ac_unit;
+      } else {
+        title = 'Gợi ý $timeStr tuyệt vời';
+        icon = Icons.wb_cloudy;
+      }
+    }
+    
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Icon(icon, size: 18, color: AppColors.primary),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+              ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWeatherFoodSuggestions() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: _weatherRecommendations.map((food) {
+          return Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: Container(
+              width: 140,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 5,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+                border: Border.all(color: Colors.grey[200]!),
+              ),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => _showFoodDetail(food),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ClipRRect(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                      child: Stack(
+                        children: [
+                          Container(
+                            height: 90,
+                            width: double.infinity,
+                            color: Colors.grey[100],
+                            child: food.image.isNotEmpty
+                                ? Image.network(
+                                    food.image,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) =>
+                                        const Icon(Icons.fastfood, color: Colors.grey),
+                                  )
+                                : const Icon(Icons.fastfood, color: Colors.grey),
+                          ),
+                          Positioned(
+                            top: 4,
+                            right: 4,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.black54,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.star, size: 10, color: Colors.amber),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    food.avgRating.toStringAsFixed(1),
+                                    style: const TextStyle(color: Colors.white, fontSize: 10),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            food.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${food.price.toStringAsFixed(0)}đ',
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   Widget _buildDistanceFoodSuggestions() {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -655,131 +883,230 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   }
 
   void _showFoodDetail(FoodItem food) {
+    int quantity = 1;
+    final cartService = CartService();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[400],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                height: 180,
-                width: double.infinity,
-                color: Colors.grey[200],
-                child: food.image.isNotEmpty
-                    ? Image.network(
-                        food.image,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) =>
-                            const Center(child: Icon(Icons.fastfood, size: 48, color: Colors.grey)),
-                      )
-                    : const Center(child: Icon(Icons.fastfood, size: 48, color: Colors.grey)),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              food.name,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            if (food.description.isNotEmpty)
-              Text(
-                food.description,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            const SizedBox(height: 12),
-            Row(
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          minChildSize: 0.5,
+          maxChildSize: 0.9,
+          expand: false,
+          builder: (context, controller) => Padding(
+            padding: const EdgeInsets.all(16),
+            child: ListView(
+              controller: controller,
               children: [
-                const Icon(Icons.star, size: 16, color: Colors.orange),
-                const SizedBox(width: 4),
-                Text(
-                  food.avgRating.toStringAsFixed(1),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[400],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(height: 16),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    height: 200,
+                    width: double.infinity,
+                    color: Colors.grey[200],
+                    child: food.image.isNotEmpty
+                        ? Image.network(
+                            food.image,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Center(
+                                child: Icon(Icons.fastfood,
+                                    size: 48, color: Colors.grey)),
+                          )
+                        : const Center(
+                            child: Icon(Icons.fastfood,
+                                size: 48, color: Colors.grey)),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 Text(
-                  '(${food.totalRatings} đánh giá)',
-                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                  food.name,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                const SizedBox(height: 12),
+                if (food.description.isNotEmpty) ...[
+                  Text(
+                    food.description,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                Row(
+                  children: [
+                    const Icon(Icons.star, size: 16, color: Colors.orange),
+                    const SizedBox(width: 4),
+                    Text(
+                      food.avgRating.toStringAsFixed(1),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '(${food.totalRatings} đánh giá)',
+                      style: const TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Giá: ${food.price.toStringAsFixed(0)}đ',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    IconButton(
+                      onPressed: () {
+                        if (quantity > 1) {
+                          setState(() => quantity--);
+                        }
+                      },
+                      icon: const Icon(Icons.remove_circle),
+                      color: AppColors.primary,
+                    ),
+                    Text(
+                      quantity.toString(),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () {
+                        setState(() => quantity++);
+                      },
+                      icon: const Icon(Icons.add_circle),
+                      color: AppColors.primary,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () async {
+                    // Tìm tên quán trong list stores hiện tại hoặc fetch nếu cần
+                    String storeName = 'Cửa hàng';
+                    final storeIndex =
+                        _stores.indexWhere((s) => s.storeId == food.storeId);
+                    if (storeIndex != -6) {
+                      if (storeIndex != -1) {
+                        storeName = _stores[storeIndex].storeName;
+                      } else {
+                        // Fetch tên quán nếu không có sẵn
+                        storeName = await SearchService()
+                            .getStoreNameById(food.storeId);
+                      }
+                    }
+
+                    try {
+                      cartService.addItem(
+                        foodId: food.foodId,
+                        foodName: food.name,
+                        price: food.price.toDouble(),
+                        storeId: food.storeId,
+                        storeName: storeName,
+                        quantity: quantity,
+                      );
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Đã thêm vào giỏ hàng'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (e.toString().contains('diff_store')) {
+                        if (context.mounted) {
+                          _showClearCartDialog(
+                              context, food, quantity, storeName);
+                        }
+                      } else {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Lỗi: $e')),
+                          );
+                        }
+                      }
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    backgroundColor: AppColors.primary,
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  child: const Text(
+                    'Thêm vào giỏ hàng',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Text(
-              'Giá: ${food.price.toStringAsFixed(0)}đ',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.primary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  final store = _stores.firstWhere(
-                    (s) => s.storeId == food.storeId,
-                    orElse: () => StoreInfo(
-                      storeId: food.storeId,
-                      storeOwnerId: '',
-                      storeName: 'Cửa hàng',
-                      latitude: 0,
-                      longitude: 0,
-                      address: '',
-                      phone: '',
-                    ),
-                  );
-                  
-                  CartService().addItem(
-                    foodId: food.foodId,
-                    foodName: food.name,
-                    price: food.price.toDouble(),
-                    storeId: food.storeId,
-                    storeName: store.storeName,
-                    quantity: 1,
-                  );
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Đã thêm vào giỏ hàng'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.add_shopping_cart, color: Colors.white),
-                label: const Text(
-                  'Thêm vào giỏ hàng',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
+          ),
         ),
+      ),
+    );
+  }
+
+  void _showClearCartDialog(
+      BuildContext context, FoodItem food, int quantity, String storeName) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Đổi cửa hàng?'),
+        content: const Text(
+          'Giỏ hàng của bạn đang có món từ quán khác. Bạn có muốn xóa giỏ cũ để đặt món tại quán này không?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Bỏ qua'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(dialogContext); // Đóng dialog
+              CartService().clear();
+              CartService().addItem(
+                foodId: food.foodId,
+                foodName: food.name,
+                price: food.price.toDouble(),
+                storeId: food.storeId,
+                storeName: storeName,
+                quantity: quantity,
+              );
+              Navigator.pop(context); // Đóng bottom sheet
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Đã xóa giỏ cũ và thêm món mới')),
+              );
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            child: const Text('Đồng ý', style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }

@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import '../models/food_item.dart';
 import '../models/store_info.dart';
 
@@ -12,6 +13,21 @@ class SearchService {
   SearchService._internal();
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  // Lấy tên cửa hàng theo ID
+  Future<String> getStoreNameById(String storeId) async {
+    try {
+      final doc = await _firestore.collection('Users').doc(storeId).get();
+      if (doc.exists) {
+        final data = doc.data();
+        return data?['fullName'] ?? data?['storeName'] ?? 'Cửa hàng';
+      }
+      return 'Cửa hàng';
+    } catch (e) {
+      debugPrint('Error getting store name: $e');
+      return 'Cửa hàng';
+    }
+  }
 
   // Lấy tất cả cửa hàng
   Future<List<StoreInfo>> getAllStores() async {
@@ -37,7 +53,8 @@ class SearchService {
         );
       }).toList();
     } catch (e) {
-      rethrow;
+      print('Error fetching all stores: $e');
+      return [];
     }
   }
 
@@ -285,13 +302,31 @@ class SearchService {
   }
   double _parseLat(dynamic pos) {
     if (pos is GeoPoint) return pos.latitude;
-    if (pos is Map) return (pos['latitude'] ?? 0).toDouble();
+    if (pos is Map) {
+      final lat = pos['latitude'];
+      if (lat is num) return lat.toDouble();
+      if (lat is String) return double.tryParse(lat.trim()) ?? 0.0;
+    }
+    if (pos is String) {
+      // Handle the case where position is saved as "[10.776 N, 106.700 E]"
+      final match = RegExp(r"\[([\d.]+)\s*N").firstMatch(pos);
+      if (match != null) return double.tryParse(match.group(1)!) ?? 0.0;
+    }
     return 0.0;
   }
 
   double _parseLon(dynamic pos) {
     if (pos is GeoPoint) return pos.longitude;
-    if (pos is Map) return (pos['longitude'] ?? 0).toDouble();
+    if (pos is Map) {
+      final lon = pos['longitude'];
+      if (lon is num) return lon.toDouble();
+      if (lon is String) return double.tryParse(lon.trim()) ?? 0.0;
+    }
+    if (pos is String) {
+      // Handle the case where position is saved as "[10.776 N, 106.700 E]"
+      final match = RegExp(r",\s*([\d.]+)\s*E").firstMatch(pos);
+      if (match != null) return double.tryParse(match.group(1)!) ?? 0.0;
+    }
     return 0.0;
   }
 }

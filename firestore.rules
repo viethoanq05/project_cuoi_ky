@@ -87,7 +87,7 @@ service cloud.firestore {
 
     match /Users/{uid} {
       // Cho phép đọc thông tin nếu là chủ sở hữu HOẶC là tài khoản Cửa hàng/Tài xế (để khách hàng tìm kiếm)
-      allow read: if signedIn();
+      allow read, list: if signedIn();
       
       allow create: if isOwner(uid)
         && hasCoreFields(request.resource.data, uid)

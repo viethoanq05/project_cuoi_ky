@@ -14,15 +14,25 @@ class CategoryService {
     try {
       final snapshot = await _firestore
           .collection(_collection)
-          .where('isActive', isEqualTo: true)
-          .orderBy('displayOrder')
           .get();
 
-      if (snapshot.docs.isEmpty) {
+      // Lọc và sắp xếp thủ công để tránh lỗi đòi Index (failed-precondition)
+      final docs = snapshot.docs.where((doc) {
+        final data = doc.data();
+        return data['isActive'] == true;
+      }).toList();
+      
+      docs.sort((a, b) {
+        final aOrder = (a.data()['displayOrder'] as num?) ?? 0;
+        final bOrder = (b.data()['displayOrder'] as num?) ?? 0;
+        return aOrder.compareTo(bOrder);
+      });
+
+      if (docs.isEmpty) {
         return _getDefaultCategories();
       }
 
-      return snapshot.docs.map((doc) => Category.fromMap({
+      return docs.map((doc) => Category.fromMap({
         ...doc.data(),
         'categoryId': doc.id,
       })).toList();
