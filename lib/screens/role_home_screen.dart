@@ -74,6 +74,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
   @override
   void initState() {
     super.initState();
+    widget.authService.addListener(_onAuthUserChanged);
     final existingAddress =
         widget.authService.currentUser?.address.trim() ?? '';
     if (existingAddress.isNotEmpty && !_isCoordinateText(existingAddress)) {
@@ -83,6 +84,53 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
       unawaited(_hydrateAddressFromStoredCoordinates());
       _bootstrapAfterFirstFrame();
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant RoleHomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.authService != widget.authService) {
+      oldWidget.authService.removeListener(_onAuthUserChanged);
+      widget.authService.addListener(_onAuthUserChanged);
+      _onAuthUserChanged();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.authService.removeListener(_onAuthUserChanged);
+    super.dispose();
+  }
+
+  void _onAuthUserChanged() {
+    if (!mounted) {
+      return;
+    }
+
+    final user = widget.authService.currentUser;
+    if (user == null) {
+      return;
+    }
+
+    final nextAddress = _addressForDisplay(user.address);
+    final parsed = _parseCoordinateText(user.position);
+    final nextLatLng = parsed == null
+        ? _currentLatLng
+        : LatLng(parsed.$1, parsed.$2);
+
+    final shouldUpdateAddress = nextAddress != _currentAddress;
+    final shouldUpdateLatLng = nextLatLng != _currentLatLng;
+
+    if (shouldUpdateAddress || shouldUpdateLatLng) {
+      setState(() {
+        _currentAddress = nextAddress;
+        _currentLatLng = nextLatLng;
+      });
+    }
+
+    if (_isCoordinateText(user.address) || user.address.trim().isEmpty) {
+      unawaited(_hydrateAddressFromStoredCoordinates());
+    }
   }
 
   Future<void> _hydrateAddressFromStoredCoordinates() async {
@@ -427,6 +475,10 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => const StoreManagementScreen()),
     );
+    if (!mounted) {
+      return;
+    }
+    _onAuthUserChanged();
   }
 
   Future<void> _openEditFoodScreen(FoodItem item) async {

@@ -56,7 +56,12 @@ class StoreTicket {
         map['total_amount'] ?? map['total'] ?? map['amount'] ?? map['price'],
       ),
       status: StoreTicketStatus.fromAny(map['status'] ?? map['order_status']),
-      createdAt: asDateTime(map['created_at'] ?? map['createdAt']),
+      createdAt: asDateTime(
+        map['order_time'] ??
+            map['orderTime'] ??
+            map['created_at'] ??
+            map['createdAt'],
+      ),
     );
   }
 }

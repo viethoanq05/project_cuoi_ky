@@ -58,24 +58,25 @@ class StoreManagementService {
   }
 
   Stream<StoreStats> watchStats() {
-    return watchStoreTickets().map((tickets) {
-      final now = DateTime.now();
-      final startToday = DateTime(now.year, now.month, now.day);
-      final startTomorrow = startToday.add(const Duration(days: 1));
-
+    return watchStoreTickets().asyncMap((tickets) async {
       var totalRevenue = 0.0;
-      var todayTickets = 0;
 
       for (final ticket in tickets) {
         if (ticket.status == StoreTicketStatus.completed) {
           totalRevenue += ticket.totalAmount;
         }
+      }
 
-        final created = ticket.createdAt;
-        if (created != null &&
-            !created.isBefore(startToday) &&
-            created.isBefore(startTomorrow)) {
-          todayTickets += 1;
+      int todayTickets;
+      try {
+        todayTickets = await _fetchTodayTicketsByOrderTime();
+      } on FirebaseException catch (e) {
+        // Fallback when Firestore composite index for order_time query
+        // has not been created yet.
+        if (e.code == 'failed-precondition') {
+          todayTickets = _countTodayTicketsFromLoadedList(tickets);
+        } else {
+          rethrow;
         }
       }
 
@@ -85,6 +86,38 @@ class StoreManagementService {
         todayTickets: todayTickets,
       );
     });
+  }
+
+  int _countTodayTicketsFromLoadedList(List<StoreTicket> tickets) {
+    final now = DateTime.now();
+    final startOfDay = DateTime(now.year, now.month, now.day);
+    final endOfDay = startOfDay.add(const Duration(days: 1));
+
+    return tickets.where((ticket) {
+      final createdAt = ticket.createdAt;
+      if (createdAt == null) {
+        return false;
+      }
+      return !createdAt.isBefore(startOfDay) && createdAt.isBefore(endOfDay);
+    }).length;
+  }
+
+  Future<int> _fetchTodayTicketsByOrderTime() async {
+    final now = DateTime.now();
+    final startOfDay = DateTime(now.year, now.month, now.day);
+    final endOfDay = startOfDay.add(const Duration(days: 1));
+
+    final snapshot = await _firestore
+        .collection(_ordersCollection)
+        .where('store_id', isEqualTo: currentStoreId)
+        .where(
+          'order_time',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay),
+        )
+        .where('order_time', isLessThan: Timestamp.fromDate(endOfDay))
+        .get();
+
+    return snapshot.docs.length;
   }
 
   Future<void> updateTicketStatus({

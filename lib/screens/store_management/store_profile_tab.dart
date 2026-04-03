@@ -128,54 +128,64 @@ class _StoreProfileTabState extends State<StoreProfileTab> {
           style: Theme.of(context).textTheme.titleSmall,
         ),
         const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: SizedBox(
-            key: _mapKey,
-            height: 220,
-            child: FlutterMap(
-              mapController: _mapController,
-              options: MapOptions(
-                initialCenter: markerPoint,
-                initialZoom: 16,
-                onTap: (_, point) => _setMarker(point, reverseGeocode: true),
-              ),
-              children: [
-                TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.example.project_cuoi_ky',
-                ),
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      point: markerPoint,
-                      width: 48,
-                      height: 48,
-                      child: Draggable<int>(
-                        data: 1,
-                        feedback: const Icon(
-                          Icons.location_on,
-                          color: Colors.red,
-                          size: 44,
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final mapHeight = constraints.maxWidth < 420
+                ? 180.0
+                : (constraints.maxWidth > 900 ? 280.0 : 220.0);
+
+            return ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                key: _mapKey,
+                height: mapHeight,
+                child: FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: markerPoint,
+                    initialZoom: 16,
+                    onTap: (_, point) =>
+                        _setMarker(point, reverseGeocode: true),
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.example.project_cuoi_ky',
+                    ),
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: markerPoint,
+                          width: 48,
+                          height: 48,
+                          child: Draggable<int>(
+                            data: 1,
+                            feedback: const Icon(
+                              Icons.location_on,
+                              color: Colors.red,
+                              size: 44,
+                            ),
+                            childWhenDragging: const Icon(
+                              Icons.location_on,
+                              color: Colors.redAccent,
+                              size: 36,
+                            ),
+                            onDragEnd: _onMarkerDragEnd,
+                            child: const Icon(
+                              Icons.location_on,
+                              color: Colors.red,
+                              size: 44,
+                            ),
+                          ),
                         ),
-                        childWhenDragging: const Icon(
-                          Icons.location_on,
-                          color: Colors.redAccent,
-                          size: 36,
-                        ),
-                        onDragEnd: _onMarkerDragEnd,
-                        child: const Icon(
-                          Icons.location_on,
-                          color: Colors.red,
-                          size: 44,
-                        ),
-                      ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         ),
         const SizedBox(height: 8),
         Text(
