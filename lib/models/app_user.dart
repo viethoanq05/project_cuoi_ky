@@ -11,6 +11,8 @@ class AppUser {
     required this.position,
     required this.profileCompleted,
     required bool? isStoreOpen,
+    this.walletBalance = 0.0,
+    this.bankAccount = '',
   }) : isStoreOpen = isStoreOpen ?? false;
 
   final String email;
@@ -22,4 +24,6 @@ class AppUser {
   final Map<String, double>? position; // {latitude: double, longitude: double}
   final bool profileCompleted;
   final bool isStoreOpen;
+  final double walletBalance;
+  final String bankAccount;
 }

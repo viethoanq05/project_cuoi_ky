@@ -12,6 +12,7 @@ class OrderService extends ChangeNotifier {
   OrderService._internal();
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static const String _ordersCollection = 'Orders';
 
   // Tạo đơn hàng
   Future<OrderData> createOrder({
@@ -28,7 +29,7 @@ class OrderService extends ChangeNotifier {
     String? notes,
   }) async {
     try {
-      final orderId = _firestore.collection('orders').doc().id;
+      final orderId = _firestore.collection(_ordersCollection).doc().id;
       final now = DateTime.now();
 
       final order = OrderData(
@@ -49,24 +50,8 @@ class OrderService extends ChangeNotifier {
         notes: notes,
       );
 
-      await _firestore.collection('orders').doc(orderId).set(order.toMap());
+      await _firestore.collection(_ordersCollection).doc(orderId).set(order.toMap());
       
-      // Thêm vào collection của khách hàng
-      await _firestore
-          .collection('users')
-          .doc(customerId)
-          .collection('orders')
-          .doc(orderId)
-          .set(order.toMap());
-
-      // Thêm vào collection của cửa hàng
-      await _firestore
-          .collection('users')
-          .doc(storeId)
-          .collection('orders')
-          .doc(orderId)
-          .set(order.toMap());
-
       notifyListeners();
       return order;
     } catch (e) {
@@ -74,12 +59,10 @@ class OrderService extends ChangeNotifier {
     }
   }
 
-  // Lấy danh sách đơn hàng của khách hàng
-  Stream<List<OrderData>> watchCustomerOrders(String customerId) {
+  // Lấy tất cả đơn hàng
+  Stream<List<OrderData>> watchAllOrders() {
     return _firestore
-        .collection('users')
-        .doc(customerId)
-        .collection('orders')
+        .collection(_ordersCollection)
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
@@ -87,12 +70,23 @@ class OrderService extends ChangeNotifier {
     });
   }
 
-  // Lấy danh sách đơn hàng của cửa hàng
-  Stream<List<OrderData>> watchStoreOrders(String storeId) {
+  // Lấy danh sách đơn hàng của khách hàng
+  Stream<List<OrderData>> watchCustomerOrders(String customerId) {
     return _firestore
-        .collection('users')
-        .doc(storeId)
-        .collection('orders')
+        .collection(_ordersCollection)
+        .where('customerId', isEqualTo: customerId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) => OrderData.fromMap(doc.data())).toList();
+    });
+  }
+
+  // Lấy danh sách đơn hàng của tài xế
+  Stream<List<OrderData>> watchDriverOrders(String driverId) {
+    return _firestore
+        .collection(_ordersCollection)
+        .where('driverId', isEqualTo: driverId)
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
@@ -114,92 +108,25 @@ class OrderService extends ChangeNotifier {
         if (driverId != null) 'driverId': driverId,
       };
 
-      // Cập nhật collection orders chính
-      await _firestore.collection('orders').doc(orderId).update(updateData);
-
-      // Lấy order để cập nhật ở user collections
-      final orderDoc = await _firestore.collection('orders').doc(orderId).get();
-      if (orderDoc.exists) {
-        final order = OrderData.fromMap(orderDoc.data() as Map<String, dynamic>);
-        
-        // Cập nhật ở khách hàng
-        await _firestore
-            .collection('users')
-            .doc(order.customerId)
-            .collection('orders')
-            .doc(orderId)
-            .update(updateData);
-
-        // Cập nhật ở cửa hàng
-        await _firestore
-            .collection('users')
-            .doc(order.storeId)
-            .collection('orders')
-            .doc(orderId)
-            .update(updateData);
-      }
-
+      await _firestore.collection(_ordersCollection).doc(orderId).update(updateData);
       notifyListeners();
     } catch (e) {
       rethrow;
     }
   }
 
-  // Thêm đánh giá
-  Future<void> addReview(
-    String orderId,
-    double rating,
-    String review,
-  ) async {
+  // Nhận đơn hàng (Cho tài xế)
+  Future<void> acceptOrder(String orderId, String driverId) async {
     try {
-      await _firestore.collection('orders').doc(orderId).update({
-        'rating': rating,
-        'review': review,
-        'updatedAt': DateTime.now(),
+      await updateOrderStatus(orderId, 'preparing', driverId: driverId);
+      
+      // Lưu vào collection DriverAccepted để theo dõi (theo yêu cầu)
+      await _firestore.collection('DriverAccepted').doc(orderId).set({
+        'orderId': orderId,
+        'driverId': driverId,
+        'status': 'accepted',
+        'acceptedAt': FieldValue.serverTimestamp(),
       });
-
-      final orderDoc = await _firestore.collection('orders').doc(orderId).get();
-      if (orderDoc.exists) {
-        final order = OrderData.fromMap(orderDoc.data() as Map<String, dynamic>);
-        
-        await _firestore
-            .collection('users')
-            .doc(order.customerId)
-            .collection('orders')
-            .doc(orderId)
-            .update({'rating': rating, 'review': review});
-
-        await _firestore
-            .collection('users')
-            .doc(order.storeId)
-            .collection('orders')
-            .doc(orderId)
-            .update({'rating': rating, 'review': review});
-      }
-
-      notifyListeners();
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  // Hủy đơn hàng
-  Future<void> cancelOrder(String orderId) async {
-    try {
-      await updateOrderStatus(orderId, 'cancelled');
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  // Lấy chi tiết đơn hàng
-  Future<OrderData?> getOrderDetail(String orderId) async {
-    try {
-      final doc = await _firestore.collection('orders').doc(orderId).get();
-      if (doc.exists) {
-        return OrderData.fromMap(doc.data() as Map<String, dynamic>);
-      }
-      return null;
     } catch (e) {
       rethrow;
     }
