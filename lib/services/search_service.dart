@@ -13,6 +13,34 @@ class SearchService {
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  // Lấy tất cả cửa hàng
+  Future<List<StoreInfo>> getAllStores() async {
+    try {
+      final snapshot = await _firestore
+          .collection('Users')
+          .where('role', isEqualTo: 'Store')
+          .get();
+
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        return StoreInfo(
+          storeId: doc.id,
+          storeOwnerId: doc.id,
+          storeName: data['fullName'] ?? data['storeName'] ?? '',
+          latitude: _parseLat(data['position']),
+          longitude: _parseLon(data['position']),
+          address: data['address'] ?? '',
+          phone: data['phone'] ?? '',
+          rating: (data['avgRating'] as num?)?.toDouble(),
+          totalRatings: data['totalRatings'] as int?,
+          isOpen: data['isStoreOpen'] ?? true,
+        );
+      }).toList();
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   // Tìm kiếm cửa hàng theo tên
   Future<List<StoreInfo>> searchStores(String query) async {
     try {
@@ -21,8 +49,8 @@ class SearchService {
       }
 
       final snapshot = await _firestore
-          .collection('users')
-          .where('role', isEqualTo: 'store')
+          .collection('Users')
+          .where('role', isEqualTo: 'Store')
           .get();
 
       final stores = snapshot.docs
@@ -37,8 +65,8 @@ class SearchService {
               storeId: doc.id,
               storeOwnerId: doc.id,
               storeName: data['fullName'] ?? '',
-              latitude: (data['position']?['latitude'] ?? 0).toDouble(),
-              longitude: (data['position']?['longitude'] ?? 0).toDouble(),
+              latitude: _parseLat(data['position']),
+              longitude: _parseLon(data['position']),
               address: data['address'] ?? '',
               phone: data['phone'] ?? '',
               rating: (data['avgRating'] as num?)?.toDouble(),
@@ -65,7 +93,7 @@ class SearchService {
         return [];
       }
 
-      Query foodQuery = _firestore.collection('foods');
+      Query foodQuery = _firestore.collection('Foods');
 
       if (storeId != null) {
         foodQuery = foodQuery.where('storeId', isEqualTo: storeId);
@@ -104,7 +132,7 @@ class SearchService {
   }) async {
     try {
       Query query = _firestore
-          .collection('foods')
+          .collection('Foods')
           .where('categoryId', isEqualTo: categoryId)
           .where('isAvailable', isEqualTo: true);
 
@@ -133,10 +161,9 @@ class SearchService {
   }) async {
     try {
       Query query = _firestore
-          .collection('foods')
+          .collection('Foods')
           .where('price', isGreaterThanOrEqualTo: minPrice)
-          .where('price', isLessThanOrEqualTo: maxPrice)
-          .where('isAvailable', isEqualTo: true);
+          .where('price', isLessThanOrEqualTo: maxPrice);
 
       if (storeId != null) {
         query = query.where('storeId', isEqualTo: storeId);
@@ -149,6 +176,7 @@ class SearchService {
             final data = doc.data() as Map<String, dynamic>;
             return FoodItem.fromMap({...data, 'foodId': doc.id});
           })
+          .where((f) => f.isAvailable) // Lọc thủ công để tránh lỗi index
           .toList();
     } catch (e) {
       rethrow;
@@ -162,9 +190,8 @@ class SearchService {
   }) async {
     try {
       Query query = _firestore
-          .collection('foods')
-          .where('avgRating', isGreaterThanOrEqualTo: minRating)
-          .where('isAvailable', isEqualTo: true);
+          .collection('Foods')
+          .where('avgRating', isGreaterThanOrEqualTo: minRating);
 
       if (storeId != null) {
         query = query.where('storeId', isEqualTo: storeId);
@@ -177,6 +204,7 @@ class SearchService {
             final data = doc.data() as Map<String, dynamic>;
             return FoodItem.fromMap({...data, 'foodId': doc.id});
           })
+          .where((f) => f.isAvailable) // Lọc thủ công để tránh lỗi index
           .toList();
     } catch (e) {
       rethrow;
@@ -190,7 +218,7 @@ class SearchService {
   ) async {
     try {
       final snapshot = await _firestore
-          .collection('foods')
+          .collection('Foods')
           .where('storeId', isEqualTo: storeId)
           .where('isAvailable', isEqualTo: true)
           .get();
@@ -217,8 +245,7 @@ class SearchService {
   Future<List<FoodItem>> getPopularFoods({int limit = 10}) async {
     try {
       final snapshot = await _firestore
-          .collection('foods')
-          .where('isAvailable', isEqualTo: true)
+          .collection('Foods')
           .orderBy('avgRating', descending: true)
           .orderBy('totalRatings', descending: true)
           .limit(limit)
@@ -229,6 +256,7 @@ class SearchService {
             final data = doc.data() as Map<String, dynamic>;
             return FoodItem.fromMap({...data, 'foodId': doc.id});
           })
+          .where((f) => f.isAvailable) // Lọc thủ công để tránh lỗi index
           .toList();
     } catch (e) {
       rethrow;
@@ -239,8 +267,7 @@ class SearchService {
   Future<List<FoodItem>> getNewestFoods({int limit = 10}) async {
     try {
       final snapshot = await _firestore
-          .collection('foods')
-          .where('isAvailable', isEqualTo: true)
+          .collection('Foods')
           .orderBy('createdAt', descending: true)
           .limit(limit)
           .get();
@@ -250,9 +277,21 @@ class SearchService {
             final data = doc.data() as Map<String, dynamic>;
             return FoodItem.fromMap({...data, 'foodId': doc.id});
           })
+          .where((f) => f.isAvailable) // Lọc thủ công để tránh lỗi index
           .toList();
     } catch (e) {
       rethrow;
     }
+  }
+  double _parseLat(dynamic pos) {
+    if (pos is GeoPoint) return pos.latitude;
+    if (pos is Map) return (pos['latitude'] ?? 0).toDouble();
+    return 0.0;
+  }
+
+  double _parseLon(dynamic pos) {
+    if (pos is GeoPoint) return pos.longitude;
+    if (pos is Map) return (pos['longitude'] ?? 0).toDouble();
+    return 0.0;
   }
 }

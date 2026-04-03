@@ -594,14 +594,22 @@ class AuthService extends ChangeNotifier {
   }
 
   Map<String, double>? _asPositionMap(dynamic value) {
-    if (value == null) {
-      return null;
+    if (value == null) return null;
+
+    if (value is GeoPoint) {
+      return {
+        'latitude': value.latitude,
+        'longitude': value.longitude,
+      };
     }
-    if (value is Map<String, dynamic>) {
+
+    if (value is Map) {
       try {
+        final lat = value['latitude'];
+        final lon = value['longitude'];
         return {
-          'latitude': (value['latitude'] is num) ? (value['latitude'] as num).toDouble() : double.parse(value['latitude'].toString()),
-          'longitude': (value['longitude'] is num) ? (value['longitude'] as num).toDouble() : double.parse(value['longitude'].toString()),
+          'latitude': (lat is num) ? lat.toDouble() : double.parse(lat.toString()),
+          'longitude': (lon is num) ? lon.toDouble() : double.parse(lon.toString()),
         };
       } catch (e) {
         return null;
@@ -612,6 +620,8 @@ class AuthService extends ChangeNotifier {
 
   String _authErrorMessage(FirebaseAuthException e) {
     switch (e.code) {
+      case 'network-request-failed':
+        return 'Lỗi kết nối mạng. Vui lòng kiểm tra Wifi/4G hoặc cấu hình DNS trên giả lập.';
       case 'invalid-credential':
       case 'wrong-password':
       case 'user-not-found':

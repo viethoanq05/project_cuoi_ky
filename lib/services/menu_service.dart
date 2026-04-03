@@ -21,6 +21,20 @@ class MenuService {
     defaultValue: 'food-images',
   );
 
+  static String getPublicImageUrl(String path) {
+    if (path.isEmpty) return '';
+    if (path.startsWith('http')) return path; // Already a full URL (e.g., from public storage or other source)
+    
+    try {
+      if (Supabase.instance.isInitialized) {
+        return Supabase.instance.client.storage.from(_storageBucket).getPublicUrl(path);
+      }
+    } catch (_) {
+      // Supabase not initialized or other error
+    }
+    return ''; // Return empty if we can't resolve it (fallback to icon)
+  }
+
   String? get currentStoreId => _auth.currentUser?.uid;
 
   Stream<List<MenuCategory>> watchCategories() {
@@ -49,13 +63,57 @@ class MenuService {
         .snapshots()
         .map((snapshot) {
           final items = snapshot.docs
-              .map((doc) => FoodItem.fromMap(doc.data(), docId: doc.id))
+              .map((doc) {
+                final item = FoodItem.fromMap(doc.data(), docId: doc.id);
+                // Resolve image path to public URL
+                return item.copyWith(image: getPublicImageUrl(item.image));
+              })
               .toList();
           items.sort(
             (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
           );
           return items;
         });
+  }
+
+  Stream<List<FoodItem>> watchStoreFoods(String storeId) {
+    if (storeId.isEmpty) {
+      return const Stream<List<FoodItem>>.empty();
+    }
+
+    return _firestore
+        .collection(_foodsCollection)
+        .where('store_id', isEqualTo: storeId)
+        .snapshots()
+        .map((snapshot) {
+          final items = snapshot.docs
+              .map((doc) {
+                final item = FoodItem.fromMap(doc.data(), docId: doc.id);
+                // Resolve image path to public URL
+                return item.copyWith(image: getPublicImageUrl(item.image));
+              })
+              .toList();
+          items.sort(
+            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+          );
+          return items;
+        });
+  }
+
+  Future<List<FoodItem>> getAllFoods() async {
+    try {
+      final snapshot = await _firestore.collection(_foodsCollection).get();
+      return snapshot.docs
+          .map((doc) {
+            final item = FoodItem.fromMap(doc.data(), docId: doc.id);
+            // Resolve image path to public URL
+            return item.copyWith(image: getPublicImageUrl(item.image));
+          })
+          .toList();
+    } catch (e) {
+      print('Error fetching all foods: $e');
+      return [];
+    }
   }
 
   Future<String?> createFood({

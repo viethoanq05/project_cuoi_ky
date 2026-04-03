@@ -18,7 +18,7 @@ class _SearchFilterScreenState extends State<SearchFilterScreen>
   late TabController _tabController;
   String _searchQuery = '';
   double _minPrice = 0;
-  double _maxPrice = 1000000;
+  double _maxPrice = 200000;
   double _minRating = 0;
 
   @override
@@ -220,11 +220,13 @@ class _SearchFilterScreenState extends State<SearchFilterScreen>
               RangeSlider(
                 values: RangeValues(_minPrice, _maxPrice),
                 min: 0,
-                max: 1000000,
-                divisions: 20,
+                max: 200000,
+                divisions: 40,
+                activeColor: Colors.green,
+                inactiveColor: Colors.green.withOpacity(0.2),
                 labels: RangeLabels(
-                  _minPrice.toStringAsFixed(0),
-                  _maxPrice.toStringAsFixed(0),
+                  '${_minPrice.toStringAsFixed(0)}đ',
+                  '${_maxPrice.toStringAsFixed(0)}đ',
                 ),
                 onChanged: (values) {
                   setState(() {
@@ -232,6 +234,28 @@ class _SearchFilterScreenState extends State<SearchFilterScreen>
                     _maxPrice = values.end;
                   });
                 },
+              ),
+              const SizedBox(height: 8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [20000, 30000, 50000, 100000].map((price) {
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ActionChip(
+                        label: Text('Dưới ${price ~/ 1000}k'),
+                        onPressed: () {
+                          setState(() {
+                            _minPrice = 0;
+                            _maxPrice = price.toDouble();
+                          });
+                        },
+                        backgroundColor: Colors.green.withOpacity(0.1),
+                        labelStyle: const TextStyle(fontSize: 11, color: Colors.green),
+                      ),
+                    );
+                  }).toList(),
+                ),
               ),
               const SizedBox(height: 16),
               Text(

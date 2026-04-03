@@ -143,7 +143,7 @@ class _FoodListScreenState extends State<FoodListScreen> {
           // Foods list
           Expanded(
             child: StreamBuilder<List<FoodItem>>(
-              stream: _menuService.watchCurrentStoreFoods(),
+              stream: _menuService.watchStoreFoods(widget.storeId),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());

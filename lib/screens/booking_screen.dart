@@ -3,7 +3,9 @@ import 'package:intl/intl.dart';
 import '../services/cart_service.dart';
 import '../services/order_service.dart';
 import '../services/auth_service.dart';
+import '../services/calendar_service.dart';
 import '../theme/app_colors.dart';
+import '../models/order.dart';
 
 class BookingScreen extends StatefulWidget {
   const BookingScreen({super.key});
@@ -178,6 +180,7 @@ class _BookingScreenState extends State<BookingScreen> {
         RadioListTile(
           title: const Text('Giao hàng ngay'),
           subtitle: const Text('Trong 30-45 phút'),
+          activeColor: AppColors.primary,
           value: 'now',
           groupValue: _deliveryOption,
           onChanged: (value) {
@@ -185,8 +188,9 @@ class _BookingScreenState extends State<BookingScreen> {
           },
         ),
         RadioListTile(
-          title: const Text('Đặt lịch giao hàng'),
-          subtitle: const Text('Chọn thời gian phù hợp'),
+          title: const Text('Đặt hàng trước (Pre-order)'),
+          subtitle: const Text('Chọn thời gian nhận hàng phù hợp'),
+          activeColor: AppColors.primary,
           value: 'scheduled',
           groupValue: _deliveryOption,
           onChanged: (value) {
@@ -349,7 +353,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
       final orderData = _cartService.toOrderMap();
 
-      await _orderService.createOrder(
+      final OrderData order = await _orderService.createOrder(
         customerId: currentUser.email,
         storeId: orderData['storeId'],
         storeName: 'Store',
@@ -366,13 +370,17 @@ class _BookingScreenState extends State<BookingScreen> {
       _cartService.clear();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Đơn hàng đã được tạo thành công'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-        Navigator.popUntil(context, (route) => route.isFirst);
+        if (scheduledTime != null) {
+          _showCalendarPrompt(order);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Đơn hàng đã được tạo thành công'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+          Navigator.popUntil(context, (route) => route.isFirst);
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -383,5 +391,41 @@ class _BookingScreenState extends State<BookingScreen> {
     } finally {
       setState(() => _isProcessing = false);
     }
+  }
+
+  void _showCalendarPrompt(OrderData order) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Đặt hàng thành công!'),
+        content: const Text(
+          'Bạn có muốn thêm lịch nhắc hẹn vào Google Calendar để không bỏ lỡ đơn hàng này không?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.popUntil(context, (route) => route.isFirst);
+            },
+            child: const Text('Bỏ qua'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await CalendarService.addOrderToCalendar(order);
+              if (mounted) {
+                Navigator.popUntil(context, (route) => route.isFirst);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+            ),
+            child: const Text(
+              'Thêm vào lịch',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -28,7 +28,7 @@ class OrderService extends ChangeNotifier {
     String? notes,
   }) async {
     try {
-      final orderId = _firestore.collection('orders').doc().id;
+      final orderId = _firestore.collection('Orders').doc().id;
       final now = DateTime.now();
 
       final order = OrderData(
@@ -49,21 +49,21 @@ class OrderService extends ChangeNotifier {
         notes: notes,
       );
 
-      await _firestore.collection('orders').doc(orderId).set(order.toMap());
+      await _firestore.collection('Orders').doc(orderId).set(order.toMap());
       
       // Thêm vào collection của khách hàng
       await _firestore
-          .collection('users')
+          .collection('Users')
           .doc(customerId)
-          .collection('orders')
+          .collection('Orders')
           .doc(orderId)
           .set(order.toMap());
 
       // Thêm vào collection của cửa hàng
       await _firestore
-          .collection('users')
+          .collection('Users')
           .doc(storeId)
-          .collection('orders')
+          .collection('Orders')
           .doc(orderId)
           .set(order.toMap());
 
@@ -77,9 +77,9 @@ class OrderService extends ChangeNotifier {
   // Lấy danh sách đơn hàng của khách hàng
   Stream<List<OrderData>> watchCustomerOrders(String customerId) {
     return _firestore
-        .collection('users')
+        .collection('Users')
         .doc(customerId)
-        .collection('orders')
+        .collection('Orders')
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
@@ -90,9 +90,9 @@ class OrderService extends ChangeNotifier {
   // Lấy danh sách đơn hàng của cửa hàng
   Stream<List<OrderData>> watchStoreOrders(String storeId) {
     return _firestore
-        .collection('users')
+        .collection('Users')
         .doc(storeId)
-        .collection('orders')
+        .collection('Orders')
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
@@ -115,26 +115,26 @@ class OrderService extends ChangeNotifier {
       };
 
       // Cập nhật collection orders chính
-      await _firestore.collection('orders').doc(orderId).update(updateData);
+      await _firestore.collection('Orders').doc(orderId).update(updateData);
 
       // Lấy order để cập nhật ở user collections
-      final orderDoc = await _firestore.collection('orders').doc(orderId).get();
+      final orderDoc = await _firestore.collection('Orders').doc(orderId).get();
       if (orderDoc.exists) {
         final order = OrderData.fromMap(orderDoc.data() as Map<String, dynamic>);
         
         // Cập nhật ở khách hàng
         await _firestore
-            .collection('users')
+            .collection('Users')
             .doc(order.customerId)
-            .collection('orders')
+            .collection('Orders')
             .doc(orderId)
             .update(updateData);
 
         // Cập nhật ở cửa hàng
         await _firestore
-            .collection('users')
+            .collection('Users')
             .doc(order.storeId)
-            .collection('orders')
+            .collection('Orders')
             .doc(orderId)
             .update(updateData);
       }
@@ -152,27 +152,27 @@ class OrderService extends ChangeNotifier {
     String review,
   ) async {
     try {
-      await _firestore.collection('orders').doc(orderId).update({
+      await _firestore.collection('Orders').doc(orderId).update({
         'rating': rating,
         'review': review,
         'updatedAt': DateTime.now(),
       });
 
-      final orderDoc = await _firestore.collection('orders').doc(orderId).get();
+      final orderDoc = await _firestore.collection('Orders').doc(orderId).get();
       if (orderDoc.exists) {
         final order = OrderData.fromMap(orderDoc.data() as Map<String, dynamic>);
         
         await _firestore
-            .collection('users')
+            .collection('Users')
             .doc(order.customerId)
-            .collection('orders')
+            .collection('Orders')
             .doc(orderId)
             .update({'rating': rating, 'review': review});
 
         await _firestore
-            .collection('users')
+            .collection('Users')
             .doc(order.storeId)
-            .collection('orders')
+            .collection('Orders')
             .doc(orderId)
             .update({'rating': rating, 'review': review});
       }
@@ -195,7 +195,7 @@ class OrderService extends ChangeNotifier {
   // Lấy chi tiết đơn hàng
   Future<OrderData?> getOrderDetail(String orderId) async {
     try {
-      final doc = await _firestore.collection('orders').doc(orderId).get();
+      final doc = await _firestore.collection('Orders').doc(orderId).get();
       if (doc.exists) {
         return OrderData.fromMap(doc.data() as Map<String, dynamic>);
       }

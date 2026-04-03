@@ -1,10 +1,27 @@
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../models/store_info.dart';
 import '../models/food_item.dart';
 import '../models/app_user.dart';
+
+class WeatherData {
+  final String condition;
+  final double temp;
+  final String description;
+  final String iconCode;
+
+  WeatherData({
+    required this.condition,
+    required this.temp,
+    required this.description,
+    required this.iconCode,
+  });
+
+  String get iconUrl => 'https://openweathermap.org/img/wn/$iconCode@2x.png';
+}
 
 class RecommendationService {
   static final RecommendationService _instance = RecommendationService._internal();
@@ -75,13 +92,13 @@ class RecommendationService {
     }
   }
 
-  // Lấy dữ liệu thời tiết từ OpenWeatherMap hoặc API khác
-  Future<String?> getWeatherCondition(double latitude, double longitude) async {
+  // Lấy dữ liệu thời tiết chi tiết từ OpenWeatherMap
+  Future<WeatherData?> getWeatherData(double latitude, double longitude) async {
     try {
       // Sử dụng OpenWeatherMap API (cần đăng ký)
-      const apiKey = 'b704cff89bc96af48c452f7a03cc433d'; // Thay API key của bạn
+      const apiKey = 'b704cff89bc96af48c452f7a03cc433d';
       final url =
-          'https://api.openweathermap.org/data/weather?lat=$latitude&lon=$longitude&appid=$apiKey&units=metric';
+          'https://api.openweathermap.org/data/2.5/weather?lat=$latitude&lon=$longitude&appid=$apiKey&units=metric&lang=vi';
 
       final response = await http.get(Uri.parse(url)).timeout(
         const Duration(seconds: 5),
@@ -90,12 +107,60 @@ class RecommendationService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['weather'][0]['main']; // Ví dụ: "Rainy", "Sunny"
+        return WeatherData(
+          condition: data['weather'][0]['main'],
+          temp: (data['main']['temp'] as num).toDouble(),
+          description: data['weather'][0]['description'],
+          iconCode: data['weather'][0]['icon'],
+        );
       }
       return null;
     } catch (e) {
-      return null; // Nếu lỗi, vẫn tiếp tục
+      debugPrint('Error fetching weather: $e');
+      return null;
     }
+  }
+
+  // Gợi ý món ăn dựa trên khoảng cách của cửa hàng
+  Future<List<FoodItem>> getDistanceBasedFoodRecommendations(
+    List<FoodItem> foods,
+    List<StoreInfo> stores,
+    double userLat,
+    double userLon,
+  ) async {
+    try {
+      if (foods.isEmpty || stores.isEmpty) return foods;
+
+      // 1. Tạo bản đồ ID cửa hàng -> Khoảng cách
+      final Map<String, double> storeDistances = {};
+      for (var store in stores) {
+        final dist = _calculateDistance(userLat, userLon, store.latitude, store.longitude);
+        storeDistances[store.storeId] = dist;
+      }
+
+      // 2. Gán khoảng cách cho mỗi món ăn (nếu món đó có storeId) và lọc
+      final List<MapEntry<FoodItem, double>> foodWithDistance = [];
+      for (var food in foods) {
+        if (storeDistances.containsKey(food.storeId)) {
+          foodWithDistance.add(MapEntry(food, storeDistances[food.storeId]!));
+        }
+      }
+
+      // 3. Sắp xếp theo khoảng cách tăng dần (gần nhất lên đầu)
+      foodWithDistance.sort((a, b) => a.value.compareTo(b.value));
+
+      // 4. Trả về danh sách món ăn đã sắp xếp
+      return foodWithDistance.map((e) => e.key).take(20).toList();
+    } catch (e) {
+      debugPrint('Error getting distance-based recommendations: $e');
+      return foods.take(10).toList();
+    }
+  }
+
+  // Deprecated: dùng getWeatherData thay thế
+  Future<String?> getWeatherCondition(double latitude, double longitude) async {
+    final data = await getWeatherData(latitude, longitude);
+    return data?.condition;
   }
 
   // Gợi ý cửa hàng dựa trên thời tiết
@@ -145,43 +210,49 @@ class RecommendationService {
     }
   }
 
-  // Gợi ý combo thực đơn dựa trên thời tiết
+  // Gợi ý món ăn dựa trên dữ liệu thời tiết thực tế
   Future<List<FoodItem>> getWeatherBasedFoodRecommendations(
     List<FoodItem> foods,
-    double userLat,
-    double userLon,
+    WeatherData? weather,
   ) async {
     try {
-      final weather = await getWeatherCondition(userLat, userLon);
+      if (weather == null) return foods.take(10).toList();
 
-      // Từ khóa gợi ý theo thời tiết
-      final weatherKeywords = {
-        'Rainy': ['cơm', 'súp', 'nóng', 'nước nóng'],
-        'Sunny': ['nước', 'kem', 'salad', 'sinh tố', 'lạnh'],
-        'Cloudy': ['mì', 'bánh', 'cà phê'],
-        'Cold': ['nóng', 'cơm', 'thịt', 'súp'],
-        'Hot': ['đá', 'lạnh', 'kem', 'nước'],
-      };
+      final condition = weather.condition;
+      final temp = weather.temp;
 
-      final keywords = weatherKeywords[weather] ?? [];
+      // Từ khóa gợi ý theo thời tiết và nhiệt độ
+      final List<String> keywords = [];
+
+      if (condition == 'Rain' || condition == 'Drizzle' || condition == 'Thunderstorm') {
+        keywords.addAll(['cơm', 'súp', 'nóng', 'cháo', 'phở', 'bún']);
+      } else if (condition == 'Clear' || condition == 'Clouds') {
+        if (temp > 28) {
+          keywords.addAll(['đá', 'lạnh', 'nước', 'kem', 'sinh tố', 'salad', 'trà sữa']);
+        } else if (temp < 20) {
+          keywords.addAll(['nóng', 'cơm', 'nướng', 'lẩu']);
+        } else {
+          keywords.addAll(['bánh', 'mì', 'cà phê', 'trà', 'ăn vặt']);
+        }
+      }
 
       final recommended = foods.where((food) {
-        final name = (food.name ?? '').toLowerCase();
-        final description = (food.description ?? '').toLowerCase();
+        final name = (food.name).toLowerCase();
+        final description = (food.description).toLowerCase();
         return keywords.any((keyword) =>
             name.contains(keyword) || description.contains(keyword));
       }).toList();
 
       // Sắp xếp theo rating
       recommended.sort((a, b) {
-        final aRating = a.avgRating ?? 0;
-        final bRating = b.avgRating ?? 0;
+        final bRating = b.avgRating;
+        final aRating = a.avgRating;
         return bRating.compareTo(aRating);
       });
 
-      return recommended.take(10).toList();
+      return recommended.take(15).toList();
     } catch (e) {
-      return foods..sort((a, b) => (b.avgRating ?? 0).compareTo(a.avgRating ?? 0));
+      return foods.take(10).toList();
     }
   }
 
