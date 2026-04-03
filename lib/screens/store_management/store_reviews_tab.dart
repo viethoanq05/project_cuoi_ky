@@ -208,79 +208,133 @@ class _ReviewsSummaryHeader extends StatelessWidget {
     final theme = Theme.of(context);
     final percentLabel = (replyRate * 100).clamp(0, 100).toStringAsFixed(0);
 
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(16, 16, 16, 10),
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF16A34A), Color(0xFF15803D)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 390;
+
+        return Container(
+          width: double.infinity,
+          margin: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            gradient: const LinearGradient(
+              colors: [Color(0xFF16A34A), Color(0xFF15803D)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (!compact)
+                Row(
+                  children: [
+                    Text(
+                      averageRating.toStringAsFixed(1),
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Row(
+                      children: List<Widget>.generate(5, (index) {
+                        final filled = index < averageRating.round();
+                        return Icon(
+                          filled
+                              ? Icons.star_rounded
+                              : Icons.star_border_rounded,
+                          size: 20,
+                          color: Colors.white,
+                        );
+                      }),
+                    ),
+                    const Spacer(),
+                    _ReviewCountBadge(totalReviews: totalReviews, theme: theme),
+                  ],
+                )
+              else
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          averageRating.toStringAsFixed(1),
+                          style: theme.textTheme.headlineMedium?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Wrap(
+                            spacing: 2,
+                            runSpacing: 2,
+                            children: List<Widget>.generate(5, (index) {
+                              final filled = index < averageRating.round();
+                              return Icon(
+                                filled
+                                    ? Icons.star_rounded
+                                    : Icons.star_border_rounded,
+                                size: 20,
+                                color: Colors.white,
+                              );
+                            }),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    _ReviewCountBadge(totalReviews: totalReviews, theme: theme),
+                  ],
+                ),
+              const SizedBox(height: 10),
               Text(
-                averageRating.toStringAsFixed(1),
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
+                'Đã phản hồi $repliedCount/$totalReviews đánh giá ($percentLabel%)',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.95),
                 ),
               ),
-              const SizedBox(width: 8),
-              Row(
-                children: List<Widget>.generate(5, (index) {
-                  final filled = index < averageRating.round();
-                  return Icon(
-                    filled ? Icons.star_rounded : Icons.star_border_rounded,
-                    size: 20,
-                    color: Colors.white,
-                  );
-                }),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  '$totalReviews đánh giá',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(99),
+                child: LinearProgressIndicator(
+                  value: replyRate.clamp(0.0, 1.0),
+                  minHeight: 8,
+                  backgroundColor: Colors.white.withValues(alpha: 0.26),
+                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          Text(
-            'Đã phản hồi $repliedCount/$totalReviews đánh giá ($percentLabel%)',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: Colors.white.withValues(alpha: 0.95),
-            ),
-          ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(99),
-            child: LinearProgressIndicator(
-              value: replyRate.clamp(0.0, 1.0),
-              minHeight: 8,
-              backgroundColor: Colors.white.withValues(alpha: 0.26),
-              valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
-            ),
-          ),
-        ],
+        );
+      },
+    );
+  }
+}
+
+class _ReviewCountBadge extends StatelessWidget {
+  const _ReviewCountBadge({required this.totalReviews, required this.theme});
+
+  final int totalReviews;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        '$totalReviews đánh giá',
+        style: theme.textTheme.labelMedium?.copyWith(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }

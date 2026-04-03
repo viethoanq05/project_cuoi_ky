@@ -279,7 +279,7 @@ class _StoreProfileTabState extends State<StoreProfileTab> {
       return;
     }
 
-    final messenger = ScaffoldMessenger.of(context);
+    final service = context.read<StoreManagementService>();
 
     setState(() {
       _isSaving = true;
@@ -297,7 +297,7 @@ class _StoreProfileTabState extends State<StoreProfileTab> {
         longitude: _selectedLocation?.longitude,
       );
 
-      await context.read<StoreManagementService>().updateStoreProfile(
+      await service.updateStoreProfile(
         profile,
         latitude: _selectedLocation?.latitude,
         longitude: _selectedLocation?.longitude,
@@ -307,6 +307,7 @@ class _StoreProfileTabState extends State<StoreProfileTab> {
         return;
       }
 
+      final messenger = ScaffoldMessenger.of(context);
       messenger.showSnackBar(
         const SnackBar(content: Text('Cập nhật hồ sơ thành công')),
       );
@@ -318,6 +319,7 @@ class _StoreProfileTabState extends State<StoreProfileTab> {
         return;
       }
 
+      final messenger = ScaffoldMessenger.of(context);
       messenger.showSnackBar(
         SnackBar(content: Text('Cập nhật thất bại: $error')),
       );
