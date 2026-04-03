@@ -1,38 +1,34 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../models/food_item.dart';
 import '../services/menu_service.dart';
 import 'food_editor_screen.dart';
 
 class StoreMenuScreen extends StatefulWidget {
-  const StoreMenuScreen({super.key, required this.menuService});
-
-  final MenuService menuService;
+  const StoreMenuScreen({super.key});
 
   @override
   State<StoreMenuScreen> createState() => _StoreMenuScreenState();
 }
 
 class _StoreMenuScreenState extends State<StoreMenuScreen> {
+  MenuService get _menuService => context.read<MenuService>();
+
   Future<void> _createFood() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => FoodEditorScreen(menuService: widget.menuService),
-      ),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const FoodEditorScreen()));
   }
 
   Future<void> _editFood(FoodItem item) async {
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) =>
-            FoodEditorScreen(menuService: widget.menuService, initial: item),
-      ),
+      MaterialPageRoute<void>(builder: (_) => FoodEditorScreen(initial: item)),
     );
   }
 
   Future<void> _toggleAvailability(FoodItem item, bool value) async {
-    final error = await widget.menuService.toggleAvailability(item, value);
+    final error = await _menuService.toggleAvailability(item, value);
     if (!mounted || error == null) {
       return;
     }
@@ -64,7 +60,7 @@ class _StoreMenuScreenState extends State<StoreMenuScreen> {
       return;
     }
 
-    final error = await widget.menuService.deleteFood(item);
+    final error = await _menuService.deleteFood(item);
     if (!mounted || error == null) {
       return;
     }
@@ -102,7 +98,7 @@ class _StoreMenuScreenState extends State<StoreMenuScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Quan ly menu cua hang')),
       body: StreamBuilder<List<MenuCategory>>(
-        stream: widget.menuService.watchCategories(),
+        stream: _menuService.watchCategories(),
         builder: (context, categorySnapshot) {
           if (categorySnapshot.hasError) {
             return Center(
@@ -117,7 +113,7 @@ class _StoreMenuScreenState extends State<StoreMenuScreen> {
           }
 
           return StreamBuilder<List<FoodItem>>(
-            stream: widget.menuService.watchCurrentStoreFoods(),
+            stream: _menuService.watchCurrentStoreFoods(),
             builder: (context, snapshot) {
               if (snapshot.hasError) {
                 return Center(child: Text('Loi tai menu: ${snapshot.error}'));

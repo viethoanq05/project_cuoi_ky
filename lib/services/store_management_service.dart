@@ -165,13 +165,16 @@ class StoreManagementService {
     required String reviewId,
     required String reply,
   }) async {
+    final trimmedReply = reply.trim();
+
     await _firestore
         .collection(_reviewsCollection)
         .doc(reviewId)
         .set(<String, dynamic>{
-          'owner_reply': reply.trim(),
-          'ownerReply': reply.trim(),
-          'store_reply': reply.trim(),
+          'owner_reply': trimmedReply,
+          'ownerReply': trimmedReply,
+          'store_reply': trimmedReply,
+          'reply': trimmedReply,
           'owner_replied_at': FieldValue.serverTimestamp(),
           'updated_at': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),

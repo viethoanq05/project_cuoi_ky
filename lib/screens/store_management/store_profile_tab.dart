@@ -2,15 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/store_management_models.dart';
 import '../../services/store_management_service.dart';
 import '../../widgets/store_management/store_profile_form.dart';
 
 class StoreProfileTab extends StatefulWidget {
-  const StoreProfileTab({super.key, required this.service});
-
-  final StoreManagementService service;
+  const StoreProfileTab({super.key});
 
   @override
   State<StoreProfileTab> createState() => _StoreProfileTabState();
@@ -75,7 +74,9 @@ class _StoreProfileTabState extends State<StoreProfileTab> {
   }
 
   Future<StoreProfile> _loadProfile() async {
-    final profile = await widget.service.getStoreProfile();
+    final profile = await context
+        .read<StoreManagementService>()
+        .getStoreProfile();
     final initialPoint = await _initialLocationFromProfile(profile);
 
     _storeNameController.text = profile.storeName;
@@ -296,7 +297,7 @@ class _StoreProfileTabState extends State<StoreProfileTab> {
         longitude: _selectedLocation?.longitude,
       );
 
-      await widget.service.updateStoreProfile(
+      await context.read<StoreManagementService>().updateStoreProfile(
         profile,
         latitude: _selectedLocation?.latitude,
         longitude: _selectedLocation?.longitude,

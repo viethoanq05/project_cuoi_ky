@@ -15,16 +15,21 @@ service cloud.firestore {
         : null;
     }
 
+    function currentRoleLower() {
+      let role = currentRole();
+      return role is string ? role.lower() : '';
+    }
+
     function isDriver() {
-      return currentRole() == 'Driver';
+      return currentRoleLower() == 'driver';
     }
 
     function isStore() {
-      return currentRole() == 'Store';
+      return currentRoleLower() == 'store';
     }
 
     function isCustomer() {
-      return currentRole() == 'Customer';
+      return currentRoleLower() == 'customer';
     }
 
     function isOwner(uid) {
@@ -32,7 +37,7 @@ service cloud.firestore {
     }
 
     function isValidRole(role) {
-      return role in ['Customer', 'Store', 'Driver'];
+      return role in ['Customer', 'Store', 'Driver', 'customer', 'store', 'driver'];
     }
 
     function hasCoreFields(data, uid) {
@@ -281,6 +286,7 @@ service cloud.firestore {
             'owner_reply',
             'ownerReply',
             'store_reply',
+            'reply',
             'owner_replied_at',
             'updated_at',
             'updatedAt'

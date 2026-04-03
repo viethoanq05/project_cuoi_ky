@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 
 import '../models/food_item.dart';
 import '../services/menu_service.dart';
 
 class FoodEditorScreen extends StatefulWidget {
-  const FoodEditorScreen({super.key, required this.menuService, this.initial});
-
-  final MenuService menuService;
+  const FoodEditorScreen({super.key, this.initial});
   final FoodItem? initial;
 
   @override
@@ -27,6 +26,8 @@ class _FoodEditorScreenState extends State<FoodEditorScreen> {
   String _imageUrl = '';
   bool _uploadingImage = false;
   bool _saving = false;
+
+  MenuService get _menuService => context.read<MenuService>();
 
   @override
   void initState() {
@@ -89,7 +90,7 @@ class _FoodEditorScreenState extends State<FoodEditorScreen> {
 
     try {
       final bytes = await picked.readAsBytes();
-      final url = await widget.menuService.uploadFoodImage(
+      final url = await _menuService.uploadFoodImage(
         bytes: bytes,
         fileName: picked.name,
       );
@@ -148,7 +149,7 @@ class _FoodEditorScreenState extends State<FoodEditorScreen> {
       );
 
       if (widget.initial == null) {
-        error = await widget.menuService.createFood(
+        error = await _menuService.createFood(
           name: payload.name,
           description: payload.description,
           categoryId: payload.categoryId,
@@ -167,7 +168,7 @@ class _FoodEditorScreenState extends State<FoodEditorScreen> {
           options: payload.options,
           isAvailable: payload.isAvailable,
         );
-        error = await widget.menuService.updateFood(item);
+        error = await _menuService.updateFood(item);
       }
     } catch (e) {
       error = 'Luu mon an that bai: $e';
@@ -228,7 +229,7 @@ class _FoodEditorScreenState extends State<FoodEditorScreen> {
                   ),
                   const SizedBox(height: 12),
                   StreamBuilder<List<MenuCategory>>(
-                    stream: widget.menuService.watchCategories(),
+                    stream: _menuService.watchCategories(),
                     builder: (context, snapshot) {
                       final items = snapshot.data ?? const <MenuCategory>[];
                       if (snapshot.hasError) {

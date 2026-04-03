@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../services/auth_service.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, required this.authService});
-
-  final AuthService authService;
+  const LoginScreen({super.key});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -34,7 +33,8 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
 
-    final errorMessage = await widget.authService.login(
+    final authService = context.read<AuthService>();
+    final errorMessage = await authService.login(
       userName: _userNameController.text,
       password: _passwordController.text,
     );
@@ -61,9 +61,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _openRegister() async {
     final registered = await Navigator.push<bool>(
       context,
-      MaterialPageRoute<bool>(
-        builder: (_) => RegisterScreen(authService: widget.authService),
-      ),
+      MaterialPageRoute<bool>(builder: (_) => const RegisterScreen()),
     );
 
     if (!mounted || registered != true) {

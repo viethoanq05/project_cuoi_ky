@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/store_management_models.dart';
 import '../../services/store_management_service.dart';
@@ -6,9 +7,7 @@ import '../../widgets/store_management/store_ticket_status_chip.dart';
 import 'store_management_formatters.dart';
 
 class StoreTicketsTab extends StatefulWidget {
-  const StoreTicketsTab({super.key, required this.service});
-
-  final StoreManagementService service;
+  const StoreTicketsTab({super.key});
 
   @override
   State<StoreTicketsTab> createState() => _StoreTicketsTabState();
@@ -29,6 +28,7 @@ class _StoreTicketsTabState extends State<StoreTicketsTab> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final service = context.read<StoreManagementService>();
 
     return Column(
       children: [
@@ -90,7 +90,7 @@ class _StoreTicketsTabState extends State<StoreTicketsTab> {
         ),
         Expanded(
           child: StreamBuilder<List<StoreTicket>>(
-            stream: widget.service.watchStoreTickets(),
+            stream: service.watchStoreTickets(),
             builder: (context, snapshot) {
               if (snapshot.hasError) {
                 return Center(
@@ -202,7 +202,7 @@ class _StoreTicketsTabState extends State<StoreTicketsTab> {
     });
 
     try {
-      await widget.service.updateTicketStatus(
+      await context.read<StoreManagementService>().updateTicketStatus(
         ticketId: ticketId,
         status: status,
       );

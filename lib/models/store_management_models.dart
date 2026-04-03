@@ -114,11 +114,22 @@ class StoreReview {
       rating: asInt(map['rating'] ?? map['stars'] ?? map['star']),
       content: asText(map['content']).isNotEmpty
           ? asText(map['content'])
-          : asText(map['comment']),
+          : (asText(map['comment']).isNotEmpty
+                ? asText(map['comment'])
+                : asText(map['review'])),
       ownerReply: asText(map['owner_reply']).isNotEmpty
           ? asText(map['owner_reply'])
-          : asText(map['store_reply']),
-      createdAt: asDateTime(map['created_at'] ?? map['createdAt']),
+          : (asText(map['store_reply']).isNotEmpty
+                ? asText(map['store_reply'])
+                : (asText(map['ownerReply']).isNotEmpty
+                      ? asText(map['ownerReply'])
+                      : asText(map['reply']))),
+      createdAt: asDateTime(
+        map['created_at'] ??
+            map['createdAt'] ??
+            map['time'] ??
+            map['timestamp'],
+      ),
     );
   }
 }

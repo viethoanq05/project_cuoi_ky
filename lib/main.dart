@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
 
 import 'firebase_options.dart';
 import 'screens/login_screen.dart';
 import 'screens/role_home_screen.dart';
 import 'services/auth_service.dart';
+import 'services/menu_service.dart';
 import 'theme/app_theme.dart';
 
 Future<void> main() async {
@@ -37,21 +39,34 @@ class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   static final AuthService _authService = AuthService.instance;
+  static final MenuService _menuService = MenuService.instance;
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _authService,
-      builder: (context, _) {
-        return MaterialApp(
-          title: 'Project Cuoi Ky',
-          debugShowCheckedModeBanner: false,
-          theme: AppTheme.light,
-          home: _authService.currentUser == null || _authService.isRegistering
-              ? LoginScreen(authService: _authService)
-              : RoleHomeScreen(authService: _authService),
-        );
-      },
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<AuthService>.value(value: _authService),
+        Provider<MenuService>.value(value: _menuService),
+      ],
+      child: const _AppRoot(),
+    );
+  }
+}
+
+class _AppRoot extends StatelessWidget {
+  const _AppRoot();
+
+  @override
+  Widget build(BuildContext context) {
+    final showLogin = context.select<AuthService, bool>(
+      (auth) => auth.currentUser == null || auth.isRegistering,
+    );
+
+    return MaterialApp(
+      title: 'Project Cuoi Ky',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.light,
+      home: showLogin ? const LoginScreen() : const RoleHomeScreen(),
     );
   }
 }

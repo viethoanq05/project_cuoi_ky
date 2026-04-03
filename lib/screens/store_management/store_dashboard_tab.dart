@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/store_management_models.dart';
 import '../../services/store_management_service.dart';
@@ -8,12 +9,12 @@ import '../../widgets/store_management/stats_card.dart';
 import 'store_management_formatters.dart';
 
 class StoreDashboardTab extends StatelessWidget {
-  const StoreDashboardTab({super.key, required this.service});
-
-  final StoreManagementService service;
+  const StoreDashboardTab({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final service = context.read<StoreManagementService>();
+
     return StreamBuilder<StoreStats>(
       stream: service.watchStats(),
       builder: (context, statsSnapshot) {

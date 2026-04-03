@@ -9,6 +9,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
 import '../models/app_user.dart';
 import '../models/food_item.dart';
@@ -21,16 +22,14 @@ import '../widgets/store_status_card.dart';
 import 'food_editor_screen.dart';
 
 class RoleHomeScreen extends StatefulWidget {
-  const RoleHomeScreen({super.key, required this.authService});
-
-  final AuthService authService;
+  const RoleHomeScreen({super.key});
 
   @override
   State<RoleHomeScreen> createState() => _RoleHomeScreenState();
 }
 
 class _RoleHomeScreenState extends State<RoleHomeScreen> {
-  final MenuService _menuService = MenuService.instance;
+  AuthService? _authService;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
   bool _checkingProfile = false;
@@ -63,6 +62,9 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
   static const String _orderStatusPreparingEn = 'Preparing';
   static const String _driverStatusDelivering = 'dang_giao';
 
+  AuthService get _auth => _authService!;
+  MenuService get _menuService => context.read<MenuService>();
+
   String _acceptedOrderStatus(String existingStatus) {
     final normalized = existingStatus.trim().toLowerCase();
     if (normalized == 'searching' || normalized == 'finding_driver') {
@@ -74,12 +76,6 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
   @override
   void initState() {
     super.initState();
-    widget.authService.addListener(_onAuthUserChanged);
-    final existingAddress =
-        widget.authService.currentUser?.address.trim() ?? '';
-    if (existingAddress.isNotEmpty && !_isCoordinateText(existingAddress)) {
-      _currentAddress = existingAddress;
-    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_hydrateAddressFromStoredCoordinates());
       _bootstrapAfterFirstFrame();
@@ -87,18 +83,27 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
   }
 
   @override
-  void didUpdateWidget(covariant RoleHomeScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.authService != widget.authService) {
-      oldWidget.authService.removeListener(_onAuthUserChanged);
-      widget.authService.addListener(_onAuthUserChanged);
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final nextAuth = context.read<AuthService>();
+    if (!identical(_authService, nextAuth)) {
+      _authService?.removeListener(_onAuthUserChanged);
+      _authService = nextAuth;
+      _authService!.addListener(_onAuthUserChanged);
+
+      final existingAddress = _auth.currentUser?.address.trim() ?? '';
+      if (existingAddress.isNotEmpty && !_isCoordinateText(existingAddress)) {
+        _currentAddress = existingAddress;
+      }
+
       _onAuthUserChanged();
     }
   }
 
   @override
   void dispose() {
-    widget.authService.removeListener(_onAuthUserChanged);
+    _authService?.removeListener(_onAuthUserChanged);
     super.dispose();
   }
 
@@ -107,7 +112,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
       return;
     }
 
-    final user = widget.authService.currentUser;
+    final user = _auth.currentUser;
     if (user == null) {
       return;
     }
@@ -134,7 +139,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
   }
 
   Future<void> _hydrateAddressFromStoredCoordinates() async {
-    final user = widget.authService.currentUser;
+    final user = _auth.currentUser;
     if (user == null) {
       return;
     }
@@ -159,7 +164,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
       _currentLatLng = LatLng(lat, lng);
     });
 
-    await widget.authService.updateCurrentLocationInfo(
+    await _auth.updateCurrentLocationInfo(
       address: resolvedAddress,
       latitude: lat,
       longitude: lng,
@@ -294,7 +299,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
       return;
     }
 
-    final role = widget.authService.currentUser?.role;
+    final role = _auth.currentUser?.role;
     if (role != UserRole.driver) {
       await _loadCurrentLocation();
     }
@@ -307,14 +312,14 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
     _checkingProfile = true;
 
     try {
-      final needsProfile = await widget.authService.needsProfileCompletion();
+      final needsProfile = await _auth.needsProfileCompletion();
       if (!mounted || !needsProfile) {
         return;
       }
 
       final profile = await _showProfileDialog(
-        initialFullName: widget.authService.currentUser?.fullName ?? '',
-        initialPhone: widget.authService.currentUser?.phone ?? '',
+        initialFullName: _auth.currentUser?.fullName ?? '',
+        initialPhone: _auth.currentUser?.phone ?? '',
       );
       if (!mounted || profile == null) {
         return;
@@ -324,7 +329,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
         _savingProfile = true;
       });
 
-      final saveError = await widget.authService.updateProfileInfo(
+      final saveError = await _auth.updateProfileInfo(
         fullName: profile.fullName,
         phone: profile.phone,
       );
@@ -347,7 +352,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
           _ensureProfileCompleted();
         });
       } else {
-        if (widget.authService.currentUser?.role != UserRole.driver) {
+        if (_auth.currentUser?.role != UserRole.driver) {
           await _loadCurrentLocation();
         }
       }
@@ -414,7 +419,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
         _currentAddress = address;
       });
 
-      final saveError = await widget.authService.updateCurrentLocationInfo(
+      final saveError = await _auth.updateCurrentLocationInfo(
         address: address,
         latitude: position.latitude,
         longitude: position.longitude,
@@ -464,11 +469,9 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
   }
 
   Future<void> _openCreateFoodScreen() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => FoodEditorScreen(menuService: _menuService),
-      ),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const FoodEditorScreen()));
   }
 
   Future<void> _openStoreManagementScreen() async {
@@ -483,10 +486,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
 
   Future<void> _openEditFoodScreen(FoodItem item) async {
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) =>
-            FoodEditorScreen(menuService: _menuService, initial: item),
-      ),
+      MaterialPageRoute<void>(builder: (_) => FoodEditorScreen(initial: item)),
     );
   }
 
@@ -674,7 +674,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
       _storeStatusError = null;
     });
 
-    final error = await widget.authService.updateStoreOpenStatus(value);
+    final error = await _auth.updateStoreOpenStatus(value);
     if (!mounted) {
       return;
     }
@@ -1003,7 +1003,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
         ),
         actions: [
           IconButton(
-            onPressed: widget.authService.logout,
+            onPressed: _auth.logout,
             icon: const Icon(Icons.logout_rounded),
             tooltip: 'Dang xuat',
           ),
@@ -1445,7 +1445,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
             tooltip: 'Cập nhật địa chỉ',
           ),
           IconButton(
-            onPressed: widget.authService.logout,
+            onPressed: _auth.logout,
             icon: const Icon(Icons.logout_rounded),
             tooltip: 'Đăng xuất',
           ),
@@ -1654,7 +1654,9 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = widget.authService.currentUser;
+    final user = context.select<AuthService, AppUser?>((auth) {
+      return auth.currentUser;
+    });
 
     if (user == null) {
       return const Scaffold(
@@ -1677,7 +1679,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
         title: Text(info.title),
         actions: [
           IconButton(
-            onPressed: widget.authService.logout,
+            onPressed: _auth.logout,
             icon: const Icon(Icons.logout_rounded),
             tooltip: 'Đăng xuất',
           ),
