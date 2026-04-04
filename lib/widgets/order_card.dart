@@ -22,16 +22,19 @@ class _OrderCardState extends State<OrderCard> {
   final UserService _userService = UserService();
   final currencyFormat = NumberFormat.currency(locale: 'vi_VN', symbol: 'đ');
   String _storeAddress = 'Đang tải địa chỉ...';
+  String _deliveryAddress = 'Đang tải địa chỉ...';
   String _displayStoreName = '';
 
   @override
   void initState() {
     super.initState();
     _displayStoreName = widget.order.storeName;
-    _loadStoreInfo();
+    _deliveryAddress = widget.order.deliveryAddress ?? 'Đang tải...';
+    _loadInfo();
   }
 
-  Future<void> _loadStoreInfo() async {
+  Future<void> _loadInfo() async {
+    // Load Store Info
     final store = await _userService.getUserById(widget.order.storeId);
     if (mounted && store != null) {
       setState(() {
@@ -39,12 +42,29 @@ class _OrderCardState extends State<OrderCard> {
         _displayStoreName = store['fullName'] ?? store['userName'] ?? widget.order.storeName;
       });
     }
+
+    // Load Delivery Address from Coords if needed
+    if (_deliveryAddress.contains('[') || _deliveryAddress.isEmpty || _deliveryAddress == 'Đang tải...') {
+      final addr = await _userService.getAddressFromCoords(widget.order.deliveryLat, widget.order.deliveryLng);
+      if (mounted) {
+        setState(() {
+          _deliveryAddress = addr;
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final itemNames = widget.order.items.map((item) => item['name'] ?? 'Sản phẩm').join(', ');
+    
+    // Format items: "Name (xQty)"
+    final itemStrings = widget.order.items.map((item) {
+      final name = item['foodName'] ?? item['name'] ?? 'Sản phẩm';
+      final qty = item['quantity'] ?? 1;
+      return "$name (x$qty)";
+    }).join(', ');
+
     final double totalEarnings = widget.order.totalAmount + widget.order.deliveryFee;
 
     return Container(
@@ -117,9 +137,9 @@ class _OrderCardState extends State<OrderCard> {
                 const SizedBox(height: 12),
                 _buildIconRow(Icons.store_rounded, 'Từ: $_storeAddress', AppColors.accent),
                 const SizedBox(height: 8),
-                _buildIconRow(Icons.location_on_rounded, 'Giao đến: ${widget.order.deliveryAddress}', AppColors.danger),
+                _buildIconRow(Icons.location_on_rounded, 'Giao đến: $_deliveryAddress', AppColors.danger),
                 const SizedBox(height: 8),
-                _buildIconRow(Icons.inventory_2_rounded, 'Món: ${itemNames.isEmpty ? "Đang cập nhật" : itemNames}', AppColors.textSecondary),
+                _buildIconRow(Icons.inventory_2_rounded, 'Món: ${itemStrings.isEmpty ? "Đang cập nhật" : itemStrings}', AppColors.textSecondary),
                 
                 if (widget.bottomAction != null) ...[
                   Padding(

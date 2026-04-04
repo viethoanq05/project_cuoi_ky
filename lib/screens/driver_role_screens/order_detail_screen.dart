@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -22,12 +23,13 @@ class OrderDetailScreen extends StatefulWidget {
 class _OrderDetailScreenState extends State<OrderDetailScreen> {
   final UserService _userService = UserService();
   final currencyFormat = NumberFormat.currency(locale: 'vi_VN', symbol: 'đ');
-
+  
   Map<String, dynamic>? _storeData;
   Map<String, dynamic>? _customerData;
   String _parsedStoreAddress = "Đang tải...";
   String _parsedDeliveryAddress = "Đang tải...";
   bool _isLoading = true;
+  final Map<String, String?> _foodImages = {};
 
   @override
   void initState() {
@@ -35,33 +37,27 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     _loadData();
   }
 
-  Future<String> _parseCoordinateToAddress(double lat, double lng) async {
-    try {
-      final url = Uri.parse('https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lng&zoom=18&addressdetails=1');
-      final response = await http.get(url, headers: {'Accept-Language': 'vi'});
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        return data['display_name'] ?? "$lat, $lng";
-      }
-    } catch (e) {
-      debugPrint("Lỗi parse địa chỉ: $e");
-    }
-    return "$lat, $lng";
-  }
-
   Future<void> _loadData() async {
     final store = await _userService.getUserById(widget.order.storeId);
     final customer = await _userService.getUserById(widget.order.customerId);
-
-    // Parse địa chỉ từ tọa độ nếu là tọa độ
-    String storeAddr = store?['address'] ?? widget.order.storeName;
-    if (storeAddr.contains('[') || storeAddr.contains(',')) {
-      // Giả sử logic parse tọa độ ở đây nếu address là chuỗi tọa độ
-    }
-
+    
+    // Parse delivery address if it's coordinates
     String deliveryAddr = widget.order.deliveryAddress ?? "Không rõ";
     if (widget.order.deliveryLat != null && widget.order.deliveryLng != null) {
-      deliveryAddr = await _parseCoordinateToAddress(widget.order.deliveryLat!, widget.order.deliveryLng!);
+      deliveryAddr = await _userService.getAddressFromCoords(widget.order.deliveryLat, widget.order.deliveryLng);
+    }
+
+    // Fetch food images
+    for (var item in widget.order.items) {
+      final foodId = item['foodId'] ?? item['food_id'];
+      if (foodId != null && !_foodImages.containsKey(foodId)) {
+        final foodDoc = await FirebaseFirestore.instance.collection('Foods').doc(foodId).get();
+        if (foodDoc.exists) {
+          _foodImages[foodId] = foodDoc.data()?['image'];
+        } else {
+          _foodImages[foodId] = null;
+        }
+      }
     }
 
     if (mounted) {
@@ -88,7 +84,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             const Text('Bạn có chắc chắn muốn nhận đơn hàng này?'),
             const SizedBox(height: 12),
             Text('Cửa hàng: ${widget.order.storeName}', style: const TextStyle(fontWeight: FontWeight.w500)),
-            Text('Tổng thu nhập: ${currencyFormat.format(widget.order.totalAmount + widget.order.deliveryFee)}',
+            Text('Tổng thu nhập: ${currencyFormat.format(widget.order.totalAmount + widget.order.deliveryFee)}', 
               style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.bold)),
           ],
         ),
@@ -120,7 +116,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final itemNames = widget.order.items.map((item) => item['name'] ?? 'Sản phẩm').join(', ');
     final isPending = ['pending', 'searching', 'dang_tim_xe'].contains(widget.order.status.toLowerCase());
 
     return Scaffold(
@@ -128,7 +123,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         title: const Text('Chi tiết đơn hàng'),
         centerTitle: true,
       ),
-      body: _isLoading
+      body: _isLoading 
         ? const Center(child: CircularProgressIndicator())
         : SingleChildScrollView(
             padding: const EdgeInsets.all(20),
@@ -143,7 +138,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   ],
                 ),
                 const SizedBox(height: 24),
-
+                
                 _buildInfoSection(
                   title: 'Cửa hàng',
                   icon: Icons.store_rounded,
@@ -166,9 +161,38 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 _buildInfoSection(
                   title: 'Mặt hàng',
                   icon: Icons.inventory_2_rounded,
-                  children: [
-                    Text(itemNames, style: theme.textTheme.bodyMedium),
-                  ],
+                  children: widget.order.items.map((item) {
+                    final foodId = item['foodId'] ?? item['food_id'];
+                    final imageUrl = _foodImages[foodId];
+                    final name = item['foodName'] ?? item['name'] ?? 'Sản phẩm';
+                    final price = item['price'] ?? 0;
+                    final qty = item['quantity'] ?? 1;
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: imageUrl != null
+                                ? Image.network(imageUrl, width: 50, height: 50, fit: BoxFit.cover)
+                                : Container(width: 50, height: 50, color: Colors.grey[200], child: const Icon(Icons.fastfood)),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                Text("${currencyFormat.format(price)} x $qty", style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                          Text(currencyFormat.format(price * qty), style: const TextStyle(fontWeight: FontWeight.w500)),
+                        ],
+                      ),
+                    );
+                  }).toList(),
                 ),
 
                 _buildInfoSection(
@@ -194,7 +218,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 ],
 
                 const SizedBox(height: 40),
-
+                
                 if (isPending && (widget.order.driverId == null || widget.order.driverId!.isEmpty))
                   SizedBox(
                     width: double.infinity,
@@ -204,7 +228,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       child: const Text('NHẬN ĐƠN HÀNG NÀY'),
                     ),
                   ),
-
+                
                 if (widget.actionButton != null) widget.actionButton!,
               ],
             ),
