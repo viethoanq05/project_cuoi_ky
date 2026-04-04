@@ -45,17 +45,21 @@ class FoodItem {
     return FoodItem(
       foodId: _asString(map['food_id']).isNotEmpty
           ? _asString(map['food_id'])
-          : (docId ?? ''),
-      storeId: _asString(map['store_id']),
+          : (_asString(map['foodId']).isNotEmpty ? _asString(map['foodId']) : (docId ?? '')),
+      storeId: _asString(map['store_id']).isNotEmpty
+          ? _asString(map['store_id'])
+          : _asString(map['storeId']),
       name: _asString(map['name']),
       description: _asString(map['description']),
-      categoryId: _asString(map['category_id']),
+      categoryId: _asString(map['category_id']).isNotEmpty
+          ? _asString(map['category_id'])
+          : _asString(map['categoryId']),
       image: _asString(map['image']),
       price: _asNum(map['price']),
-      isAvailable: _asBool(map['is_available']),
+      isAvailable: _asBool(map['is_available']) || _asBool(map['isAvailable']),
       options: parsedOptions,
-      avgRating: _asNum(map['avg_rating']),
-      totalRatings: _asInt(map['total_ratings']),
+      avgRating: _asNum(map['avg_rating']) != 0 ? _asNum(map['avg_rating']) : _asNum(map['avgRating']),
+      totalRatings: _asInt(map['total_ratings']) != 0 ? _asInt(map['total_ratings']) : _asInt(map['totalRatings']),
     );
   }
 

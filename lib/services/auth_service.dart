@@ -217,7 +217,10 @@ class AuthService extends ChangeNotifier {
           .collection(_usersCollection)
           .doc(user.uid)
           .update(payload);
-      _updateCurrentUserLocal(address: address.trim(), position: pos);
+      _updateCurrentUserLocal(
+        address: address.trim(),
+        position: {'latitude': latitude, 'longitude': longitude},
+      );
       return null;
     } on FirebaseException catch (e) {
       return e.message ?? 'Khong the cap nhat vi tri.';
@@ -227,7 +230,20 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> logout() async {
-    await _auth.signOut();
+    try {
+      // 1. Xóa trạng thái cục bộ và thông báo ngay lập tức để UI nhảy về LoginScreen
+      _currentUser = null;
+      notifyListeners();
+
+      // 2. Hủy lắng nghe dữ liệu từ Firestore
+      await _userSubscription?.cancel();
+      _userSubscription = null;
+      
+      // 3. Đăng xuất khỏi Firebase (non-blocking để UI mượt hơn)
+      unawaited(_auth.signOut());
+    } catch (e) {
+      debugPrint('Error during logout: $e');
+    }
   }
 
   Future<String?> updateStoreOpenStatus(bool isOpen) async {
@@ -353,7 +369,7 @@ class AuthService extends ChangeNotifier {
     final address = _asTrimmedString(data?['address']).isNotEmpty
         ? _asTrimmedString(data?['address'])
         : _asTrimmedString(data?['location']);
-    final position = _asTrimmedString(data?['position']);
+    final position = _asPositionMap(data?['position']);
     final profileCompleted = _asBool(data?['profile_completed']);
 
     bool isStoreOpen = false;
@@ -363,6 +379,7 @@ class AuthService extends ChangeNotifier {
     }
 
     return AppUser(
+      id: user.uid,
       email: user.email?.trim() ?? _asTrimmedString(data?['email']),
       role: UserRoleDisplay.fromKey(roleKey),
       userName: userName,
@@ -464,7 +481,7 @@ class AuthService extends ChangeNotifier {
     String? fullName,
     String? phone,
     String? address,
-    String? position,
+    Map<String, double>? position,
     bool? profileCompleted,
     bool? isStoreOpen,
   }) {
@@ -474,6 +491,7 @@ class AuthService extends ChangeNotifier {
     }
 
     _currentUser = AppUser(
+      id: existing.id,
       email: existing.email,
       role: existing.role,
       userName: existing.userName,
@@ -590,8 +608,35 @@ class AuthService extends ChangeNotifier {
     return false;
   }
 
+  Map<String, double>? _asPositionMap(dynamic value) {
+    if (value == null) return null;
+
+    if (value is GeoPoint) {
+      return {
+        'latitude': value.latitude,
+        'longitude': value.longitude,
+      };
+    }
+
+    if (value is Map) {
+      try {
+        final lat = value['latitude'];
+        final lon = value['longitude'];
+        return {
+          'latitude': (lat is num) ? lat.toDouble() : double.parse(lat.toString()),
+          'longitude': (lon is num) ? lon.toDouble() : double.parse(lon.toString()),
+        };
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  }
+
   String _authErrorMessage(FirebaseAuthException e) {
     switch (e.code) {
+      case 'network-request-failed':
+        return 'Lỗi kết nối mạng. Vui lòng kiểm tra Wifi/4G hoặc cấu hình DNS trên giả lập.';
       case 'invalid-credential':
       case 'wrong-password':
       case 'user-not-found':

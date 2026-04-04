@@ -10,7 +10,6 @@ import 'firebase_options.dart';
 import 'screens/login_screen.dart';
 import 'screens/role_home_screen.dart';
 import 'services/auth_service.dart';
-import 'services/supabase_config.dart';
 import 'theme/app_theme.dart';
 
 void main() {
@@ -56,86 +55,8 @@ class _BootstrapAppState extends State<_BootstrapApp> {
       anonKey: supabaseAnonKey,
     ).timeout(const Duration(seconds: 20));
 
-    await AuthService.instance.init().timeout(const Duration(seconds: 10));
-  }
-
-  Future<Map<String, dynamic>> _loadSupabaseConfig() async {
-    const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-    const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
-    const supabaseStorageBucket = String.fromEnvironment('SUPABASE_STORAGE_BUCKET');
-
-    if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
-      return {
-        'SUPABASE_URL': supabaseUrl,
-        'SUPABASE_ANON_KEY': supabaseAnonKey,
-        'SUPABASE_STORAGE_BUCKET': supabaseStorageBucket,
-      };
-    }
-
-    try {
-      final jsonString = await rootBundle.loadString('assets/supabase.dev.json');
-      final config = json.decode(jsonString) as Map<String, dynamic>;
-      return {
-        'SUPABASE_URL': config['SUPABASE_URL'] as String? ?? '',
-        'SUPABASE_ANON_KEY': config['SUPABASE_ANON_KEY'] as String? ?? '',
-        'SUPABASE_STORAGE_BUCKET': config['SUPABASE_STORAGE_BUCKET'] as String? ?? '',
-      };
-    } catch (_) {
-      return {
-        'SUPABASE_URL': supabaseUrl,
-        'SUPABASE_ANON_KEY': supabaseAnonKey,
-        'SUPABASE_STORAGE_BUCKET': supabaseStorageBucket,
-      };
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<void>(
-      future: _initFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return MaterialApp(
-            debugShowCheckedModeBanner: false,
-            theme: AppTheme.light,
-            home: const Scaffold(
-              body: Center(
-                child: SizedBox(
-                  height: 22,
-                  width: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              ),
-            ),
-          );
-        }
-
-        final error = snapshot.error;
-        if (error != null) {
-          return MaterialApp(
-            debugShowCheckedModeBanner: false,
-            theme: AppTheme.light,
-            home: Scaffold(
-              body: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(
-                    'Khoi dong that bai:\n$error',
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-            ),
-          );
-        }
-
-        return ChangeNotifierProvider<AuthService>.value(
-          value: AuthService.instance,
-          child: const MyApp(),
-        );
-      },
-    );
-  }
+  await AuthService.instance.init();
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -146,6 +67,7 @@ class MyApp extends StatelessWidget {
     return Consumer<AuthService>(
       builder: (context, authService, _) {
         return MaterialApp(
+          key: ValueKey(_authService.currentUser?.email ?? 'logged-out'),
           title: 'Project Cuoi Ky',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light,

@@ -15,6 +15,7 @@ import '../services/auth_service.dart';
 import '../services/menu_service.dart';
 import '../widgets/food_grid_card.dart';
 import '../widgets/store_status_card.dart';
+import 'customer_home_screen.dart';
 import 'food_editor_screen.dart';
 
 class RoleHomeScreen extends StatefulWidget {
@@ -82,6 +83,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
   }
 
   Future<void> _bootstrapAfterFirstFrame() async {
+    if (widget.authService.currentUser == null) return;
     await _ensureProfileCompleted();
     if (!mounted) {
       return;
@@ -94,6 +96,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
   }
 
   Future<void> _ensureProfileCompleted() async {
+    if (widget.authService.currentUser == null) return;
     if (_checkingProfile) {
       return;
     }
@@ -161,6 +164,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
   }
 
   Future<void> _loadCurrentLocation() async {
+    if (widget.authService.currentUser == null) return;
     if (_loadingLocation) {
       return;
     }
@@ -780,12 +784,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
   }
 
   Widget _buildDriverHome(AppUser user) {
-    final firebaseUser = _firebaseAuth.currentUser;
-    if (firebaseUser == null) {
-      return const Scaffold(body: Center(child: Text('Ban chua dang nhap.')));
-    }
-
-    final driverUid = firebaseUser.uid;
+    final driverUid = user.id;
     final driverName = _displayName(user);
 
     final theme = Theme.of(context);
@@ -1360,7 +1359,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
                   }
 
                   return StreamBuilder<List<FoodItem>>(
-                    stream: _menuService.watchCurrentStoreFoods(),
+                    stream: _menuService.watchCurrentStoreFoods(storeId: user.id),
                     builder: (context, foodSnapshot) {
                       if (foodSnapshot.hasError) {
                         return Center(
@@ -1468,6 +1467,10 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
 
     if (user.role == UserRole.driver) {
       return _buildDriverHome(user);
+    }
+
+    if (user.role == UserRole.customer) {
+      return CustomerHomeScreen(authService: widget.authService);
     }
 
     final info = roleInfo(user.role);
