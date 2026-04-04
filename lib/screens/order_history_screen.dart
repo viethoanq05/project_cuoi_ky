@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../domain/entities/order_entity.dart';
-import '../providers/order_history_provider.dart';
+import '../models/order.dart';
+import '../services/order_service.dart';
 import 'order_tracking_screen.dart';
 import 'review_order_screen.dart';
 
-class OrderHistoryScreen extends StatefulWidget {
+class OrderHistoryScreen extends StatelessWidget {
   final String userId;
 
   const OrderHistoryScreen({
@@ -14,34 +13,42 @@ class OrderHistoryScreen extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<OrderHistoryScreen> createState() => _OrderHistoryScreenState();
-}
-
-class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
-  @override
-  void initState() {
-    super.initState();
-    Future.microtask(() {
-      context.read<OrderHistoryProvider>().fetchUserOrders(widget.userId);
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Order History'),
         elevation: 0,
       ),
-      body: Consumer<OrderHistoryProvider>(
-        builder: (context, provider, _) {
-          if (provider.isLoading) {
-            return const Center(
-              child: CircularProgressIndicator(),
+      body: StreamBuilder<List<OrderData>>(
+        stream: OrderService().watchCustomerOrders(userId),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 64,
+                    color: Colors.red.shade400,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Error: ${snapshot.error}',
+                    style: const TextStyle(color: Colors.red),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
             );
           }
 
-          if (provider.isEmpty) {
+          final orders = snapshot.data ?? [];
+          if (orders.isEmpty) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -65,42 +72,15 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
             );
           }
 
-          if (provider.isError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.error_outline,
-                    size: 64,
-                    color: Colors.red.shade400,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Error: ${provider.errorMessage}',
-                    style: const TextStyle(color: Colors.red),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: () {
-                      provider.refreshOrders(widget.userId);
-                    },
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
-            );
-          }
-
           return RefreshIndicator(
-            onRefresh: () => provider.refreshOrders(widget.userId),
+            onRefresh: () async {
+              await Future.delayed(const Duration(milliseconds: 300));
+            },
             child: ListView.builder(
               padding: const EdgeInsets.all(12),
-              itemCount: provider.orders.length,
+              itemCount: orders.length,
               itemBuilder: (context, index) {
-                final order = provider.orders[index];
-                return _buildOrderCard(context, order);
+                return _buildOrderCard(context, orders[index]);
               },
             ),
           );
@@ -109,14 +89,14 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     );
   }
 
-  Widget _buildOrderCard(BuildContext context, OrderEntity order) {
+  Widget _buildOrderCard(BuildContext context, OrderData order) {
     return GestureDetector(
       onTap: () {
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (context) => OrderTrackingScreen(
-              orderId: order.id,
-              userId: widget.userId,
+              orderId: order.orderId,
+              userId: userId,
             ),
           ),
         );
@@ -135,7 +115,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Order #${order.id.substring(0, 8)}',
+                        'Order #${order.orderId.length >= 8 ? order.orderId.substring(0, 8) : order.orderId}',
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
@@ -190,13 +170,21 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                     style: TextStyle(fontWeight: FontWeight.w500),
                   ),
                   Text(
-                    '${order.totalPrice.toStringAsFixed(0)}đ',
+                    '${(order.totalAmount + order.deliveryFee).toStringAsFixed(0)}đ',
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Payment: ${_getPaymentMethodLabel(order.paymentMethod)}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
+                ),
               ),
               const SizedBox(height: 12),
               Row(
@@ -209,8 +197,8 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (context) => OrderTrackingScreen(
-                                orderId: order.id,
-                                userId: widget.userId,
+                                orderId: order.orderId,
+                                userId: userId,
                               ),
                             ),
                           );
@@ -231,7 +219,51 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                       ),
                     ),
                   ),
-                  if (order.status == 'delivered' || order.status == 'completed') ...[
+                  if (order.status == 'on_the_way') ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: SizedBox(
+                        height: 36,
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            try {
+                              await OrderService().updateOrderStatus(
+                                order.orderId,
+                                'delivered',
+                              );
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Đơn hàng đã được xác nhận nhận hàng',
+                                    ),
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Cập nhật trạng thái thất bại: $e',
+                                    ),
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                          child: const Text('Xác nhận đã nhận hàng'),
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (order.status == 'delivered' && order.review == null) ...[
                     const SizedBox(width: 8),
                     Expanded(
                       child: SizedBox(
@@ -241,9 +273,9 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                             Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (context) => ReviewOrderScreen(
-                                  orderId: order.id,
+                                  orderId: order.orderId,
                                   storeId: order.storeId,
-                                  userId: widget.userId,
+                                  userId: userId,
                                 ),
                               ),
                             );
@@ -274,18 +306,19 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
   String _getStatusLabel(String status) {
     switch (status) {
       case 'pending':
-        return 'Waiting';
+        return 'Đang chờ';
       case 'confirmed':
-        return 'Confirmed';
+        return 'Đã xác nhận';
       case 'preparing':
-        return 'Preparing';
-      case 'delivering':
-        return 'Delivering';
-      case 'completed':
+        return 'Đang chuẩn bị';
+      case 'ready':
+        return 'Sẵn sàng';
+      case 'on_the_way':
+        return 'Đang giao';
       case 'delivered':
-        return 'Completed';
+        return 'Đã giao';
       case 'cancelled':
-        return 'Cancelled';
+        return 'Đã hủy';
       default:
         return status;
     }
@@ -297,16 +330,29 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
         return Colors.orange;
       case 'confirmed':
       case 'preparing':
+      case 'ready':
         return Colors.blue;
-      case 'delivering':
+      case 'on_the_way':
         return Colors.purple;
-      case 'completed':
       case 'delivered':
         return Colors.green;
       case 'cancelled':
         return Colors.red;
       default:
         return Colors.grey;
+    }
+  }
+
+  String _getPaymentMethodLabel(String method) {
+    switch (method) {
+      case 'wallet':
+        return 'Ví điện tử';
+      case 'cod':
+        return 'COD';
+      case 'online':
+        return 'Thanh toán trực tuyến';
+      default:
+        return method;
     }
   }
 }

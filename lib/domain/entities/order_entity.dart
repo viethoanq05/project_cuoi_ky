@@ -9,6 +9,7 @@ class OrderEntity {
   final String paymentMethod;
   final DateTime createdAt;
   final DateTime? updatedAt;
+  final DateTime? scheduledTime;
   final String? deliveryAddress;
 
   OrderEntity({
@@ -22,6 +23,7 @@ class OrderEntity {
     required this.paymentMethod,
     required this.createdAt,
     this.updatedAt,
+    this.scheduledTime,
     this.deliveryAddress,
   });
 
@@ -43,6 +45,7 @@ class OrderEntity {
     String? paymentMethod,
     DateTime? createdAt,
     DateTime? updatedAt,
+    DateTime? scheduledTime,
     String? deliveryAddress,
   }) {
     return OrderEntity(
@@ -56,6 +59,7 @@ class OrderEntity {
       paymentMethod: paymentMethod ?? this.paymentMethod,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      scheduledTime: scheduledTime ?? this.scheduledTime,
       deliveryAddress: deliveryAddress ?? this.deliveryAddress,
     );
   }

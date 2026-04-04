@@ -22,7 +22,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   void initState() {
     super.initState();
     Future.microtask(() {
-      context.read<OrderTrackingProvider>().watchOrder(widget.orderId);
+      context.read<OrderTrackingProvider>().watchOrder(widget.orderId, widget.userId);
     });
   }
 
@@ -228,7 +228,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    order.id.substring(0, 12),
+                    order.id.length >= 12 ? order.id.substring(0, 12) : order.id,
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ],

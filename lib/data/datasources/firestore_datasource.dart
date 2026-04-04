@@ -19,6 +19,7 @@ class FirestoreDatasource {
     required double totalPrice,
     required String paymentMethod,
     required String deliveryAddress,
+    DateTime? scheduledTime,
   }) async {
     try {
       final orderData = {
@@ -30,11 +31,12 @@ class FirestoreDatasource {
         'status': 'pending',
         'payment_method': paymentMethod,
         'delivery_address': deliveryAddress,
+        'scheduled_time': scheduledTime?.toIso8601String(),
         'created_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
       };
 
-      await _firebaseFirestore.collection('orders').doc(orderId).set(orderData);
+      await _firebaseFirestore.collection('Orders').doc(orderId).set(orderData);
 
       return OrderModel.fromJson(orderData);
     } catch (e) {
@@ -45,7 +47,7 @@ class FirestoreDatasource {
   Future<List<OrderModel>> getUserOrders(String userId) async {
     try {
       final snapshot = await _firebaseFirestore
-          .collection('orders')
+          .collection('Orders')
           .where('user_id', isEqualTo: userId)
           .get();
 
@@ -62,7 +64,22 @@ class FirestoreDatasource {
 
   Stream<OrderModel?> watchOrder(String orderId) {
     return _firebaseFirestore
-        .collection('orders')
+        .collection('Orders')
+        .doc(orderId)
+        .snapshots()
+        .map((snapshot) {
+      if (snapshot.exists && snapshot.data() != null) {
+        return OrderModel.fromJson(snapshot.data()!);
+      }
+      return null;
+    });
+  }
+
+  Stream<OrderModel?> watchOrderFromUser(String orderId, String userId) {
+    return _firebaseFirestore
+        .collection('Users')
+        .doc(userId)
+        .collection('Orders')
         .doc(orderId)
         .snapshots()
         .map((snapshot) {
@@ -76,7 +93,7 @@ class FirestoreDatasource {
   Future<OrderModel?> getOrderById(String orderId) async {
     try {
       final doc =
-          await _firebaseFirestore.collection('orders').doc(orderId).get();
+          await _firebaseFirestore.collection('Orders').doc(orderId).get();
       if (doc.exists && doc.data() != null) {
         return OrderModel.fromJson(doc.data()!);
       }
@@ -88,7 +105,7 @@ class FirestoreDatasource {
 
   Future<void> updateOrderStatus(String orderId, String newStatus) async {
     try {
-      await _firebaseFirestore.collection('orders').doc(orderId).update({
+      await _firebaseFirestore.collection('Orders').doc(orderId).update({
         'status': newStatus,
         'updated_at': DateTime.now().toIso8601String(),
       });
@@ -274,6 +291,7 @@ class FirestoreDatasource {
     required List<Map<String, dynamic>> items,
     required double totalPrice,
     required String deliveryAddress,
+    DateTime? scheduledTime,
   }) async {
     try {
       await _firebaseFirestore.runTransaction((transaction) async {
@@ -298,7 +316,7 @@ class FirestoreDatasource {
         });
 
         // Create order
-        final orderRef = _firebaseFirestore.collection('orders').doc(orderId);
+        final orderRef = _firebaseFirestore.collection('Orders').doc(orderId);
         transaction.set(orderRef, {
           'id': orderId,
           'user_id': userId,
@@ -308,6 +326,7 @@ class FirestoreDatasource {
           'status': 'pending',
           'payment_method': 'wallet',
           'delivery_address': deliveryAddress,
+          'scheduled_time': scheduledTime?.toIso8601String(),
           'created_at': DateTime.now().toIso8601String(),
           'updated_at': DateTime.now().toIso8601String(),
         });

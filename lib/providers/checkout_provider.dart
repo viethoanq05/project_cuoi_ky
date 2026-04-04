@@ -77,6 +77,7 @@ class CheckoutProvider extends ChangeNotifier {
     required double totalPrice,
     required String paymentMethod,
     required String deliveryAddress,
+    DateTime? scheduledTime,
   }) async {
     _state = CheckoutState.processing;
     _errorMessage = '';
@@ -92,6 +93,7 @@ class CheckoutProvider extends ChangeNotifier {
             items: items,
             totalPrice: totalPrice,
             deliveryAddress: deliveryAddress,
+            scheduledTime: scheduledTime,
           );
           break;
 
@@ -102,6 +104,7 @@ class CheckoutProvider extends ChangeNotifier {
             items: items,
             totalPrice: totalPrice,
             deliveryAddress: deliveryAddress,
+            scheduledTime: scheduledTime,
           );
           break;
 
@@ -113,6 +116,7 @@ class CheckoutProvider extends ChangeNotifier {
             items: items,
             totalPrice: totalPrice,
             deliveryAddress: deliveryAddress,
+            scheduledTime: scheduledTime,
           );
           break;
       }
@@ -133,6 +137,7 @@ class CheckoutProvider extends ChangeNotifier {
     required List<OrderItemEntity> items,
     required double totalPrice,
     required String deliveryAddress,
+    DateTime? scheduledTime,
   }) async {
     _createdOrder = await _orderRepository.createOrder(
       userId: userId,
@@ -141,6 +146,7 @@ class CheckoutProvider extends ChangeNotifier {
       totalPrice: totalPrice,
       paymentMethod: 'cod',
       deliveryAddress: deliveryAddress,
+      scheduledTime: scheduledTime,
     );
   }
 
@@ -150,6 +156,7 @@ class CheckoutProvider extends ChangeNotifier {
     required List<OrderItemEntity> items,
     required double totalPrice,
     required String deliveryAddress,
+    DateTime? scheduledTime,
   }) async {
     final isValid =
         await _userRepository.validateWalletBalance(userId, totalPrice);
@@ -164,6 +171,7 @@ class CheckoutProvider extends ChangeNotifier {
       totalPrice: totalPrice,
       paymentMethod: 'wallet',
       deliveryAddress: deliveryAddress,
+      scheduledTime: scheduledTime,
     );
   }
 
@@ -173,6 +181,7 @@ class CheckoutProvider extends ChangeNotifier {
     required List<OrderItemEntity> items,
     required double totalPrice,
     required String deliveryAddress,
+    DateTime? scheduledTime,
   }) async {
     // Simulate payment processing with progress animation
     _processingProgress = 0.0;
@@ -202,6 +211,7 @@ class CheckoutProvider extends ChangeNotifier {
       totalPrice: totalPrice,
       paymentMethod: 'online',
       deliveryAddress: deliveryAddress,
+      scheduledTime: scheduledTime,
     );
 
     _processingProgress = 1.0;

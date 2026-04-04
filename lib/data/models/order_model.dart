@@ -11,6 +11,7 @@ class OrderModel {
   final String paymentMethod;
   final DateTime createdAt;
   final DateTime? updatedAt;
+  final DateTime? scheduledTime;
   final String? deliveryAddress;
 
   OrderModel({
@@ -24,6 +25,7 @@ class OrderModel {
     required this.paymentMethod,
     required this.createdAt,
     this.updatedAt,
+    this.scheduledTime,
     this.deliveryAddress,
   });
 
@@ -46,6 +48,9 @@ class OrderModel {
       updatedAt: json['updated_at'] != null
           ? DateTime.parse(json['updated_at'] as String)
           : null,
+      scheduledTime: json['scheduled_time'] != null
+          ? DateTime.parse(json['scheduled_time'] as String)
+          : null,
       deliveryAddress: json['delivery_address'] as String?,
     );
   }
@@ -62,6 +67,7 @@ class OrderModel {
       'payment_method': paymentMethod,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
+      'scheduled_time': scheduledTime?.toIso8601String(),
       'delivery_address': deliveryAddress,
     };
   }
@@ -78,6 +84,7 @@ class OrderModel {
       paymentMethod: paymentMethod,
       createdAt: createdAt,
       updatedAt: updatedAt,
+      scheduledTime: scheduledTime,
       deliveryAddress: deliveryAddress,
     );
   }
@@ -93,6 +100,7 @@ class OrderModel {
     String? paymentMethod,
     DateTime? createdAt,
     DateTime? updatedAt,
+    DateTime? scheduledTime,
     String? deliveryAddress,
   }) {
     return OrderModel(
@@ -106,6 +114,7 @@ class OrderModel {
       paymentMethod: paymentMethod ?? this.paymentMethod,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      scheduledTime: scheduledTime ?? this.scheduledTime,
       deliveryAddress: deliveryAddress ?? this.deliveryAddress,
     );
   }

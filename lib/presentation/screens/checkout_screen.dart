@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../domain/entities/order_entity.dart';
 import '../providers/cart_provider.dart';
 import '../providers/checkout_provider.dart';
 import '../providers/user_profile_provider.dart';
+import 'order_tracking_screen.dart';
 import 'payment_success_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
@@ -21,16 +23,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   late TextEditingController _deliveryAddressController;
   String _selectedPaymentMethod = 'cod';
   double _deliveryFee = 15000;
-  String _deliveryOption = 'now'; // 'now' or 'scheduled'
-  DateTime? _selectedDate;
-  TimeOfDay? _selectedTime;
 
   @override
   void initState() {
     super.initState();
     _deliveryAddressController = TextEditingController();
-    _selectedDate = DateTime.now().add(const Duration(days: 1));
-    _selectedTime = const TimeOfDay(hour: 12, minute: 0);
     Future.microtask(() {
       final userProvider = context.read<UserProfileProvider>();
       if (userProvider.userProfile == null) {
@@ -113,26 +110,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-
-                // Delivery Option
-                const Text(
-                  'Delivery Time',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 12),
-                _buildDeliveryOptionSelector(),
-                const SizedBox(height: 24),
-
-                // Date & Time picker (if scheduled)
-                if (_deliveryOption == 'scheduled') ...[
-                  const Text(
-                    'Select Date & Time',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildDateTimePicker(),
-                  const SizedBox(height: 24),
-                ],
 
                 // Payment Method
                 const Text(
@@ -238,114 +215,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ),
         );
       }).toList(),
-    );
-  }
-
-  Widget _buildDeliveryOptionSelector() {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        children: [
-          RadioListTile<String>(
-            title: const Text('Deliver now'),
-            subtitle: const Text('Within 30-45 minutes'),
-            value: 'now',
-            groupValue: _deliveryOption,
-            onChanged: (value) {
-              setState(() {
-                _deliveryOption = value ?? 'now';
-              });
-            },
-          ),
-          Divider(height: 0, color: Colors.grey.shade200),
-          RadioListTile<String>(
-            title: const Text('Schedule delivery'),
-            subtitle: const Text('Choose your preferred time'),
-            value: 'scheduled',
-            groupValue: _deliveryOption,
-            onChanged: (value) {
-              setState(() {
-                _deliveryOption = value ?? 'now';
-              });
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDateTimePicker() {
-    return Column(
-      children: [
-        // Date picker
-        GestureDetector(
-          onTap: () async {
-            final picked = await showDatePicker(
-              context: context,
-              initialDate: _selectedDate ?? DateTime.now(),
-              firstDate: DateTime.now(),
-              lastDate: DateTime.now().add(const Duration(days: 30)),
-            );
-            if (picked != null) {
-              setState(() => _selectedDate = picked);
-            }
-          },
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.calendar_today, color: Colors.blue),
-                const SizedBox(width: 12),
-                Text(
-                  _selectedDate != null
-                      ? '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}'
-                      : 'Select date',
-                  style: const TextStyle(fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        // Time picker
-        GestureDetector(
-          onTap: () async {
-            final picked = await showTimePicker(
-              context: context,
-              initialTime: _selectedTime ?? const TimeOfDay(hour: 12, minute: 0),
-            );
-            if (picked != null) {
-              setState(() => _selectedTime = picked);
-            }
-          },
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.access_time, color: Colors.blue),
-                const SizedBox(width: 12),
-                Text(
-                  _selectedTime != null
-                      ? '${_selectedTime!.hour.toString().padLeft(2, '0')}:${_selectedTime!.minute.toString().padLeft(2, '0')}'
-                      : 'Select time',
-                  style: const TextStyle(fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
     );
   }
 
@@ -464,24 +333,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
 
-    // Validate scheduled time if selected
-    DateTime? scheduledTime;
-    if (_deliveryOption == 'scheduled') {
-      if (_selectedDate == null || _selectedTime == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Vui lòng chọn ngày và giờ giao hàng')),
-        );
-        return;
-      }
-      scheduledTime = DateTime(
-        _selectedDate!.year,
-        _selectedDate!.month,
-        _selectedDate!.day,
-        _selectedTime!.hour,
-        _selectedTime!.minute,
-      );
-    }
-
     if (_selectedPaymentMethod == 'wallet') {
       final isValid = await checkoutProvider.validateWalletBalance(
         widget.userId,
@@ -508,7 +359,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       totalPrice: totalPrice,
       paymentMethod: _selectedPaymentMethod,
       deliveryAddress: deliveryAddress,
-      scheduledTime: scheduledTime,
     );
 
     if (mounted) {

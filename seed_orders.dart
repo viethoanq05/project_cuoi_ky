@@ -37,10 +37,10 @@ class SampleOrderSeeder {
   Future<void> seedSampleOrders() async {
     try {
       // Sample user ID - replace with actual user ID when testing
-      const String sampleUserId = 'sample_user_123';
-      const String sampleUserName = 'samplecustomer';
-      const String sampleUserEmail = 'samplecustomer@example.com';
-      const String samplePassword = 'test123456';
+      const String sampleUserId = 'test_customer_123';
+      const String sampleUserName = 'khachhang';
+      const String sampleUserEmail = 'khachhang@example.com';
+      const String samplePassword = '123123123';
 
       // Sample store IDs - these should exist in your Firestore
       const String store1Id = 'store_1';
@@ -77,11 +77,11 @@ class SampleOrderSeeder {
         'email': sampleUserEmail,
         'role': 'Customer',
         'created_at': DateTime.now().toIso8601String(),
-        'fullName': 'Sample Customer',
+        'fullName': 'Khách Hàng Test',
         'phone': '0901234567',
         'address': '123 Đường ABC, Quận 1, TP.HCM',
         'position': {'latitude': 10.77653, 'longitude': 106.70098},
-        'wallet_balance': 250000,
+        'wallet_balance': 500000,
         'profile_completed': true,
       });
       await _firestore.collection('Usernames').doc(sampleUserName.toLowerCase()).set({

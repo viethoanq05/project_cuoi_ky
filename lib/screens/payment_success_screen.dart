@@ -147,7 +147,7 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
                           children: [
                             _buildDetailRow(
                               label: 'Mã đơn hàng',
-                              value: widget.orderId.substring(0, 12),
+                              value: widget.orderId.length >= 12 ? widget.orderId.substring(0, 12) : widget.orderId,
                               isCopyable: true,
                             ),
                             const SizedBox(height: 16),

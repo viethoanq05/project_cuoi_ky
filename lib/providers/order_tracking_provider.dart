@@ -47,14 +47,14 @@ class OrderTrackingProvider extends ChangeNotifier {
         (_order!.status == 'pending' || _order!.status == 'confirmed');
   }
 
-  void watchOrder(String orderId) {
+  void watchOrder(String orderId, String userId) {
     if (_currentOrderId == orderId) return;
 
     _currentOrderId = orderId;
     _state = OrderTrackingState.loading;
     notifyListeners();
 
-    _orderRepository.watchOrder(orderId).listen(
+    _orderRepository.watchOrderFromUser(orderId, userId).listen(
       (order) {
         _order = order;
         if (order != null) {

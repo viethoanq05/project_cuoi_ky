@@ -8,6 +8,7 @@ class OrderData {
   final List<Map<String, dynamic>> items;
   final double totalAmount;
   final double deliveryFee;
+  final String paymentMethod;
   final String status; // pending, confirmed, preparing, ready, on_the_way, delivered, cancelled
   final DateTime? scheduledTime; // Nếu là đặt lịch
   final DateTime createdAt;
@@ -28,6 +29,7 @@ class OrderData {
     required this.items,
     required this.totalAmount,
     required this.deliveryFee,
+    required this.paymentMethod,
     required this.status,
     required this.createdAt,
     this.scheduledTime,
@@ -50,6 +52,7 @@ class OrderData {
       'items': items,
       'totalAmount': totalAmount,
       'deliveryFee': deliveryFee,
+      'paymentMethod': paymentMethod,
       'status': status,
       'scheduledTime': scheduledTime,
       'createdAt': createdAt,
@@ -73,6 +76,7 @@ class OrderData {
       items: List<Map<String, dynamic>>.from(map['items'] as List),
       totalAmount: (map['totalAmount'] as num).toDouble(),
       deliveryFee: (map['deliveryFee'] as num).toDouble(),
+      paymentMethod: map['paymentMethod'] as String? ?? 'cod',
       status: map['status'] as String,
       createdAt: (map['createdAt'] as Timestamp).toDate(),
       scheduledTime: map['scheduledTime'] != null 
@@ -98,6 +102,7 @@ class OrderData {
     String? notes,
     double? rating,
     String? review,
+    String? paymentMethod,
   }) {
     return OrderData(
       orderId: orderId,
@@ -107,6 +112,7 @@ class OrderData {
       items: items,
       totalAmount: totalAmount,
       deliveryFee: deliveryFee,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
       status: status ?? this.status,
       scheduledTime: scheduledTime,
       createdAt: createdAt,

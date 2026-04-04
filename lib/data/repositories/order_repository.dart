@@ -17,6 +17,7 @@ class OrderRepository implements OrderRepositoryInterface {
     required double totalPrice,
     required String paymentMethod,
     required String deliveryAddress,
+    DateTime? scheduledTime,
   }) async {
     try {
       final orderId = DateTime.now().millisecondsSinceEpoch.toString();
@@ -39,6 +40,7 @@ class OrderRepository implements OrderRepositoryInterface {
           items: itemsData,
           totalPrice: totalPrice,
           deliveryAddress: deliveryAddress,
+          scheduledTime: scheduledTime,
         );
       } else {
         // COD payment
@@ -50,6 +52,7 @@ class OrderRepository implements OrderRepositoryInterface {
           totalPrice: totalPrice,
           paymentMethod: paymentMethod,
           deliveryAddress: deliveryAddress,
+          scheduledTime: scheduledTime,
         );
         return orderModel.toEntity();
       }
@@ -78,6 +81,16 @@ class OrderRepository implements OrderRepositoryInterface {
   @override
   Stream<OrderEntity?> watchOrder(String orderId) {
     return _datasource.watchOrder(orderId).map((model) {
+      if (model != null) {
+        return model.toEntity();
+      }
+      return null;
+    });
+  }
+
+  @override
+  Stream<OrderEntity?> watchOrderFromUser(String orderId, String userId) {
+    return _datasource.watchOrderFromUser(orderId, userId).map((model) {
       if (model != null) {
         return model.toEntity();
       }

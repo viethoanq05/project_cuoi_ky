@@ -21,6 +21,7 @@ class OrderService extends ChangeNotifier {
     required List<Map<String, dynamic>> items,
     required double totalAmount,
     required double deliveryFee,
+    required String paymentMethod,
     DateTime? scheduledTime,
     String? deliveryAddress,
     double? deliveryLat,
@@ -39,6 +40,7 @@ class OrderService extends ChangeNotifier {
         items: items,
         totalAmount: totalAmount,
         deliveryFee: deliveryFee,
+        paymentMethod: paymentMethod,
         status: 'pending',
         scheduledTime: scheduledTime,
         createdAt: now,
@@ -49,23 +51,59 @@ class OrderService extends ChangeNotifier {
         notes: notes,
       );
 
-      await _firestore.collection('Orders').doc(orderId).set(order.toMap());
-      
-      // Thêm vào collection của khách hàng
-      await _firestore
-          .collection('Users')
-          .doc(customerId)
-          .collection('Orders')
-          .doc(orderId)
-          .set(order.toMap());
+      if (paymentMethod == 'wallet') {
+        await _firestore.runTransaction((transaction) async {
+          final userRef = _firestore.collection('Users').doc(customerId);
+          final userSnapshot = await transaction.get(userRef);
 
-      // Thêm vào collection của cửa hàng
-      await _firestore
-          .collection('Users')
-          .doc(storeId)
-          .collection('Orders')
-          .doc(orderId)
-          .set(order.toMap());
+          if (!userSnapshot.exists) {
+            throw Exception('User không tồn tại');
+          }
+
+          final walletBalance =
+              (userSnapshot.data()?['wallet_balance'] as num?)?.toDouble() ?? 0.0;
+
+          if (walletBalance < totalAmount) {
+            throw Exception('Số dư ví không đủ');
+          }
+
+          transaction.update(userRef, {
+            'wallet_balance': FieldValue.increment(-totalAmount),
+            'updatedAt': now,
+          });
+
+          final ordersRef = _firestore.collection('Orders').doc(orderId);
+          transaction.set(ordersRef, order.toMap());
+
+          final customerOrderRef = userRef.collection('Orders').doc(orderId);
+          transaction.set(customerOrderRef, order.toMap());
+
+          final storeOrderRef = _firestore
+              .collection('Users')
+              .doc(storeId)
+              .collection('Orders')
+              .doc(orderId);
+          transaction.set(storeOrderRef, order.toMap());
+        });
+      } else {
+        await _firestore.collection('Orders').doc(orderId).set(order.toMap());
+
+        // Thêm vào collection của khách hàng
+        await _firestore
+            .collection('Users')
+            .doc(customerId)
+            .collection('Orders')
+            .doc(orderId)
+            .set(order.toMap());
+
+        // Thêm vào collection của cửa hàng
+        await _firestore
+            .collection('Users')
+            .doc(storeId)
+            .collection('Orders')
+            .doc(orderId)
+            .set(order.toMap());
+      }
 
       notifyListeners();
       return order;
@@ -83,8 +121,21 @@ class OrderService extends ChangeNotifier {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs.map((doc) => OrderData.fromMap(doc.data())).toList();
+      return snapshot.docs
+          .map((doc) => OrderData.fromMap(doc.data() as Map<String, dynamic>))
+          .toList();
     });
+  }
+
+  Future<bool> validateWalletBalance(String customerId, double amount) async {
+    final doc = await _firestore.collection('Users').doc(customerId).get();
+    if (!doc.exists) {
+      throw Exception('User không tồn tại');
+    }
+
+    final walletBalance =
+        (doc.data()?['wallet_balance'] as num?)?.toDouble() ?? 0.0;
+    return walletBalance >= amount;
   }
 
   // Lấy danh sách đơn hàng của cửa hàng
