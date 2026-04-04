@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../../models/app_user.dart';
 import '../../services/auth_service.dart';
 
@@ -33,13 +36,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _phoneController = TextEditingController(text: widget.user.phone);
     _addressController = TextEditingController(text: widget.user.address);
 
-    if (widget.user.position != null) {
+    if (widget.user.position != null && 
+        widget.user.position!['latitude'] != null && 
+        widget.user.position!['longitude'] != null) {
       _selectedLocation = LatLng(
         widget.user.position!['latitude']!,
         widget.user.position!['longitude']!,
       );
     } else {
-      _selectedLocation = const LatLng(10.762622, 106.660172); // Default HCM
+      _selectedLocation = const LatLng(21.028511, 105.804817); // Default Hà Nội
     }
   }
 
@@ -58,14 +63,37 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     });
 
     try {
-      List<Placemark> placemarks = await placemarkFromCoordinates(latLng.latitude, latLng.longitude);
-      if (placemarks.isNotEmpty) {
-        Placemark place = placemarks.first;
-        String address = "${place.street}, ${place.subAdministrativeArea}, ${place.administrativeArea}";
-        _addressController.text = address;
+      String address = "";
+      if (kIsWeb) {
+        // Fallback cho Web: Sử dụng Nominatim API
+        final url = Uri.parse('https://nominatim.openstreetmap.org/reverse?format=json&lat=${latLng.latitude}&lon=${latLng.longitude}&zoom=18&addressdetails=1');
+        final response = await http.get(url, headers: {'Accept-Language': 'vi'});
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          address = data['display_name'] ?? "";
+        }
+      } else {
+        // Mobile: Sử dụng thư viện geocoding native
+        List<Placemark> placemarks = await placemarkFromCoordinates(latLng.latitude, latLng.longitude);
+        if (placemarks.isNotEmpty) {
+          Placemark p = placemarks.first;
+          List<String> parts = [];
+          if (p.street != null && p.street!.isNotEmpty) parts.add(p.street!);
+          if (p.subAdministrativeArea != null && p.subAdministrativeArea!.isNotEmpty) parts.add(p.subAdministrativeArea!);
+          if (p.administrativeArea != null && p.administrativeArea!.isNotEmpty) parts.add(p.administrativeArea!);
+          address = parts.join(', ');
+        }
+      }
+
+      if (address.isNotEmpty) {
+        setState(() {
+          _addressController.text = address;
+        });
       }
     } catch (e) {
       debugPrint("Lỗi lấy địa chỉ: $e");
+      // Fallback cuối cùng: Hiển thị tọa độ nếu không lấy được tên địa chỉ
+      _addressController.text = "${latLng.latitude.toStringAsFixed(6)}, ${latLng.longitude.toStringAsFixed(6)}";
     }
   }
 
@@ -75,7 +103,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     setState(() => _isSaving = true);
 
     try {
-      // 1. Cập nhật thông tin cơ bản
       final profileError = await widget.authService.updateProfileInfo(
         fullName: _nameController.text.trim(),
         phone: _phoneController.text.trim(),
@@ -83,7 +110,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       if (profileError != null) throw profileError;
 
-      // 2. Cập nhật địa chỉ và tọa độ từ Map
       if (_selectedLocation != null) {
         final locationError = await widget.authService.updateCurrentLocationInfo(
           address: _addressController.text.trim(),
@@ -133,19 +159,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   children: [
                     TextFormField(
                       controller: _nameController,
-                      decoration: const InputDecoration(labelText: 'Họ và tên', prefixIcon: Icon(Icons.person_outline)),
+                      decoration: const InputDecoration(
+                        labelText: 'Họ và tên', 
+                        prefixIcon: Icon(Icons.person_outline),
+                        border: OutlineInputBorder(),
+                      ),
                       validator: (v) => (v == null || v.isEmpty) ? 'Vui lòng nhập tên' : null,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
-                      controller: _emailController,
-                      decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email_outlined)),
-                      enabled: false, // Email thường không nên cho đổi trực tiếp ở đây
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
                       controller: _phoneController,
-                      decoration: const InputDecoration(labelText: 'Số điện thoại', prefixIcon: Icon(Icons.phone_outlined)),
+                      decoration: const InputDecoration(
+                        labelText: 'Số điện thoại', 
+                        prefixIcon: Icon(Icons.phone_outlined),
+                        border: OutlineInputBorder(),
+                      ),
                       keyboardType: TextInputType.phone,
                       validator: (v) => (v == null || v.isEmpty) ? 'Vui lòng nhập SĐT' : null,
                     ),
@@ -153,40 +181,57 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     TextFormField(
                       controller: _addressController,
                       decoration: const InputDecoration(
-                        labelText: 'Địa chỉ',
+                        labelText: 'Địa chỉ hiển thị',
                         prefixIcon: Icon(Icons.location_on_outlined),
-                        hintText: 'Chọn trên bản đồ hoặc nhập thủ công',
+                        border: OutlineInputBorder(),
+                        hintText: 'Chọn trên bản đồ để tự động điền',
                       ),
+                      maxLines: 2,
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
                     const Text('Chọn vị trí trên bản đồ:', style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     SizedBox(
-                      height: 300,
+                      height: 350,
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(12),
-                        child: FlutterMap(
-                          options: MapOptions(
-                            initialCenter: _selectedLocation!,
-                            initialZoom: 15,
-                            onTap: _onMapTap,
-                          ),
+                        child: Stack(
                           children: [
-                            TileLayer(
-                              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                              userAgentPackageName: 'com.example.app',
-                            ),
-                            if (_selectedLocation != null)
-                              MarkerLayer(
-                                markers: [
-                                  Marker(
-                                    point: _selectedLocation!,
-                                    width: 40,
-                                    height: 40,
-                                    child: const Icon(Icons.location_pin, color: Colors.red, size: 40),
-                                  ),
-                                ],
+                            FlutterMap(
+                              options: MapOptions(
+                                initialCenter: _selectedLocation!,
+                                initialZoom: 15,
+                                onTap: _onMapTap,
                               ),
+                              children: [
+                                TileLayer(
+                                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                  userAgentPackageName: 'com.example.project_cuoi_ky',
+                                ),
+                                if (_selectedLocation != null)
+                                  MarkerLayer(
+                                    markers: [
+                                      Marker(
+                                        point: _selectedLocation!,
+                                        width: 40,
+                                        height: 40,
+                                        child: const Icon(Icons.location_pin, color: Colors.red, size: 40),
+                                      ),
+                                    ],
+                                  ),
+                              ],
+                            ),
+                            Positioned(
+                              top: 10,
+                              right: 10,
+                              child: FloatingActionButton.small(
+                                onPressed: () {
+                                  // Reset map về vị trí hiện tại của marker
+                                  setState(() {});
+                                },
+                                child: const Icon(Icons.my_location),
+                              ),
+                            )
                           ],
                         ),
                       ),
@@ -194,10 +239,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     const SizedBox(height: 32),
                     SizedBox(
                       width: double.infinity,
-                      height: 50,
-                      child: FilledButton(
+                      height: 55,
+                      child: FilledButton.icon(
                         onPressed: _saveProfile,
-                        child: const Text('LƯU THÔNG TIN'),
+                        icon: const Icon(Icons.save),
+                        label: const Text('LƯU THÔNG TIN HỒ SƠ', style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
                     ),
                   ],

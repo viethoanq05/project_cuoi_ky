@@ -6,8 +6,10 @@ import '../../models/app_user.dart';
 import '../../models/order.dart';
 import '../../services/auth_service.dart';
 import '../../controller/driver_controller.dart';
+import '../../widgets/order_card.dart';
 import 'profile_screen.dart';
 import 'activity_screen.dart';
+import 'active_orders_screen.dart';
 
 class DriverDashboard extends StatefulWidget {
   const DriverDashboard({super.key, required this.authService});
@@ -36,6 +38,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
               index: _selectedIndex,
               children: [
                 _buildMainDashboard(user, controller),
+                const DriverActiveOrdersScreen(),
                 const DriverActivityScreen(),
                 DriverProfileScreen(user: user, authService: widget.authService),
               ],
@@ -48,6 +51,11 @@ class _DriverDashboardState extends State<DriverDashboard> {
                   icon: Icon(Icons.dashboard_outlined),
                   selectedIcon: Icon(Icons.dashboard),
                   label: 'Trang chủ',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.shopping_bag_outlined),
+                  selectedIcon: Icon(Icons.shopping_bag),
+                  label: 'Đơn hàng',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.history_outlined),
@@ -185,30 +193,12 @@ class _DriverDashboardState extends State<DriverDashboard> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Danh sách đơn hàng',
-                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              if (isOnline)
-                controller.isScanning
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : TextButton.icon(
-                      onPressed: controller.scanTimeoutSeconds > 0 
-                          ? null 
-                          : () => controller.scanNearbyOrders(),
-                      icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
-                      label: Text(controller.scanTimeoutSeconds > 0 
-                          ? 'Đợi ${controller.scanTimeoutSeconds}s' 
-                          : 'Quét đơn hàng'),
-                      style: TextButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        foregroundColor: Colors.blueAccent,
-                      ),
-                    ),
-            ],
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Danh sách đơn hàng',
+              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
           ),
           const SizedBox(height: 8),
           Expanded(
@@ -228,39 +218,12 @@ class _DriverDashboardState extends State<DriverDashboard> {
                             itemCount: controller.nearbyOrders.length,
                             itemBuilder: (context, index) {
                               final order = controller.nearbyOrders[index];
-                              return _buildOrderCard(order);
+                              // Bỏ onTap gán sẵn ở đây để OrderCard tự dùng mặc định (mở chi tiết)
+                              return OrderCard(order: order);
                             },
                           ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildOrderCard(OrderData order) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(12),
-        leading: const CircleAvatar(
-          backgroundColor: Colors.blueAccent,
-          child: Icon(Icons.shopping_bag_outlined, color: Colors.white),
-        ),
-        title: Text(order.storeName, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(order.deliveryAddress ?? 'Không rõ địa chỉ', maxLines: 2),
-            const SizedBox(height: 4),
-            Text(
-              'Tổng: ${currencyFormat.format(order.totalAmount)}',
-              style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () {},
       ),
     );
   }

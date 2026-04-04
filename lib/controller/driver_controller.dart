@@ -6,10 +6,12 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/order.dart';
 import '../services/auth_service.dart';
+import '../services/order_service.dart';
 import 'OrderController.dart';
 
 class DriverController extends ChangeNotifier {
   final OrderController _orderController = OrderController();
+  final OrderService _orderService = OrderService();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   
@@ -18,27 +20,23 @@ class DriverController extends ChangeNotifier {
   LatLng? _currentLocation;
   double _radiusKm = 5.0;
   bool _isLoading = false;
-  bool _isScanning = false;
-  int _scanTimeoutSeconds = 0;
-  Timer? _cooldownTimer;
   bool _updatingStatus = false;
+
+  StreamSubscription<Position>? _positionSubscription;
+  StreamSubscription? _orderSubscription;
 
   // Getters
   List<OrderData> get nearbyOrders => _nearbyOrders;
   LatLng? get currentLocation => _currentLocation;
   bool get isLoading => _isLoading;
-  bool get isScanning => _isScanning;
-  int get scanTimeoutSeconds => _scanTimeoutSeconds;
   bool get updatingStatus => _updatingStatus;
 
-  StreamSubscription? _orderSubscription;
-
   void init() {
-    _startLocationUpdates();
-    _listenToOrders();
+    _startLocationTracking();
+    _listenToOrders(); // Real-time listener for Firestore changes
   }
 
-  // Chức năng theo dõi đơn hàng
+  // Lắng nghe Firestore: Tự động cập nhật khi có thay đổi trên server
   void _listenToOrders() {
     _orderSubscription?.cancel();
     _orderSubscription = _orderController.watchAvailableOrders().listen((orders) {
@@ -47,78 +45,107 @@ class DriverController extends ChangeNotifier {
     });
   }
 
-  // Lấy và cập nhật vị trí
-  Future<void> _startLocationUpdates() async {
+  // Lấy vị trí và Load dữ liệu (Đảm bảo luôn kết thúc dù có lỗi)
+  Future<void> _fetchCurrentLocationAndLoad() async {
+    if (_isLoading) return;
     _isLoading = true;
     notifyListeners();
 
     try {
+      // Sử dụng Future.timeout để đảm bảo không bị treo vĩnh viễn (đặc biệt trên Web)
       Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high, 
+          timeLimit: Duration(seconds: 8),
+        ),
+      ).timeout(const Duration(seconds: 10));
+      
       _currentLocation = LatLng(position.latitude, position.longitude);
-      _filterOrders();
+      debugPrint('Vị trí cập nhật: ${_currentLocation!.latitude}, ${_currentLocation!.longitude}');
     } catch (e) {
-      debugPrint('Lỗi lấy vị trí: $e');
+      debugPrint('Lỗi hoặc Timeout khi lấy vị trí: $e');
+      // Tiếp tục thực hiện lọc đơn hàng dựa trên vị trí cũ hoặc hiện tất cả
     } finally {
+      _filterOrders();
       _isLoading = false;
       notifyListeners();
     }
-
-    Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 100),
-    ).listen((position) {
-      _currentLocation = LatLng(position.latitude, position.longitude);
-      _filterOrders();
-    });
   }
 
-  // Quét đơn hàng xung quanh
-  Future<void> scanNearbyOrders() async {
-    if (_isScanning || _scanTimeoutSeconds > 0) return;
+  Future<void> _startLocationTracking() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        debugPrint('Dịch vụ vị trí đang tắt');
+        await _fetchCurrentLocationAndLoad(); // Cố gắng load đơn hàng dù không có vị trí
+        return;
+      }
 
-    _isScanning = true;
-    notifyListeners();
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          await _fetchCurrentLocationAndLoad();
+          return;
+        }
+      }
+      
+      if (permission == LocationPermission.deniedForever) {
+        await _fetchCurrentLocationAndLoad();
+        return;
+      }
+      
+      // Load lần đầu khi vào App
+      await _fetchCurrentLocationAndLoad();
+
+      // Theo dõi di chuyển Real-time (Cập nhật ngầm)
+      _positionSubscription?.cancel();
+      _positionSubscription = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.bestForNavigation, 
+          distanceFilter: 5
+        ),
+      ).listen((Position position) {
+        _currentLocation = LatLng(position.latitude, position.longitude);
+        _filterOrders();
+      });
+    } catch (e) {
+      debugPrint('Lỗi khởi tạo vị trí: $e');
+      await _fetchCurrentLocationAndLoad();
+    }
+  }
+
+  Future<String?> acceptOrder(String orderId) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return 'Chưa đăng nhập';
 
     try {
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-      _currentLocation = LatLng(position.latitude, position.longitude);
-      _filterOrders();
+      await _orderService.acceptOrder(orderId, uid);
+      return null;
     } catch (e) {
-      debugPrint('Lỗi quét đơn: $e');
+      return e.toString();
     }
-
-    _isScanning = false;
-    _scanTimeoutSeconds = 5;
-    notifyListeners();
-
-    _cooldownTimer?.cancel();
-    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_scanTimeoutSeconds > 0) {
-        _scanTimeoutSeconds--;
-        notifyListeners();
-      } else {
-        timer.cancel();
-      }
-    });
   }
 
-  // Bật/Tắt trạng thái Online (Chuyển từ View sang Controller)
   Future<void> toggleOnlineStatus(bool currentStatus) async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return;
 
+    final willBeOnline = !currentStatus;
     _updatingStatus = true;
     notifyListeners();
 
     try {
       await _firestore.collection('Users').doc(uid).update({
-        'driver_info.is_online': !currentStatus,
-        'driver_info.status': !currentStatus ? 'online' : 'offline',
+        'driver_info.is_online': willBeOnline,
+        'driver_info.status': willBeOnline ? 'online' : 'offline',
         'updatedAt': FieldValue.serverTimestamp(),
       });
+
+      // Nếu bật nhận đơn, tự động tải dữ liệu
+      if (willBeOnline) {
+        await _fetchCurrentLocationAndLoad();
+      }
     } catch (e) {
       debugPrint('Lỗi cập nhật trạng thái: $e');
     } finally {
@@ -127,41 +154,26 @@ class DriverController extends ChangeNotifier {
     }
   }
 
-  // Lắng nghe thông tin tài xế từ Firestore
   Stream<Map<String, dynamic>?> watchDriverInfo() {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return Stream.value(null);
     return _firestore.collection('Users').doc(uid).snapshots().map((snap) {
       final data = snap.data();
       if (data == null) return null;
-      final raw = data['driver_info'];
-      if (raw is Map<String, dynamic>) return raw;
-      return null;
+      return data['driver_info'] as Map<String, dynamic>?;
     });
   }
 
-  // Lọc đơn hàng
   void _filterOrders() {
-    if (_currentLocation == null) {
-      _nearbyOrders = [];
-    } else {
-      _nearbyOrders = _orderController.filterOrdersByLocation(
-        orders: _allOrders,
-        currentPosition: _currentLocation!,
-        radiusInKm: _radiusKm,
-      );
-    }
+    // TẠM THỜI: Hiện tất cả đơn hàng để test
+    _nearbyOrders = List.from(_allOrders);
     notifyListeners();
-  }
-
-  void logout() {
-    AuthService.instance.logout();
   }
 
   @override
   void dispose() {
+    _positionSubscription?.cancel();
     _orderSubscription?.cancel();
-    _cooldownTimer?.cancel();
     super.dispose();
   }
 }
