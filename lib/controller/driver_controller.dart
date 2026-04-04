@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:http/http.dart' as http;
 import '../models/order.dart';
 import '../services/auth_service.dart';
 import '../services/order_service.dart';
@@ -18,6 +22,7 @@ class DriverController extends ChangeNotifier {
   List<OrderData> _allOrders = [];
   List<OrderData> _nearbyOrders = [];
   LatLng? _currentLocation;
+  String _currentAddress = 'Đang xác định vị trí...';
   double _radiusKm = 5.0;
   bool _isLoading = false;
   bool _updatingStatus = false;
@@ -28,15 +33,15 @@ class DriverController extends ChangeNotifier {
   // Getters
   List<OrderData> get nearbyOrders => _nearbyOrders;
   LatLng? get currentLocation => _currentLocation;
+  String get currentAddress => _currentAddress;
   bool get isLoading => _isLoading;
   bool get updatingStatus => _updatingStatus;
 
   void init() {
     _startLocationTracking();
-    _listenToOrders(); // Real-time listener for Firestore changes
+    _listenToOrders();
   }
 
-  // Lắng nghe Firestore: Tự động cập nhật khi có thay đổi trên server
   void _listenToOrders() {
     _orderSubscription?.cancel();
     _orderSubscription = _orderController.watchAvailableOrders().listen((orders) {
@@ -45,14 +50,49 @@ class DriverController extends ChangeNotifier {
     });
   }
 
-  // Lấy vị trí và Load dữ liệu (Đảm bảo luôn kết thúc dù có lỗi)
+  Future<void> _fetchAddress(double lat, double lng) async {
+    try {
+      String address = "";
+      if (kIsWeb) {
+        // Fallback cho Web: Sử dụng Nominatim API
+        final url = Uri.parse('https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lng&zoom=18&addressdetails=1');
+        final response = await http.get(url, headers: {'Accept-Language': 'vi'});
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          address = data['display_name'] ?? "";
+        }
+      } else {
+        // Mobile: Sử dụng thư viện geocoding native
+        List<Placemark> placemarks = await placemarkFromCoordinates(lat, lng);
+        if (placemarks.isNotEmpty) {
+          Placemark p = placemarks.first;
+          List<String> parts = [];
+          if (p.street != null && p.street!.isNotEmpty) parts.add(p.street!);
+          if (p.subAdministrativeArea != null && p.subAdministrativeArea!.isNotEmpty) parts.add(p.subAdministrativeArea!);
+          if (p.administrativeArea != null && p.administrativeArea!.isNotEmpty) parts.add(p.administrativeArea!);
+          address = parts.join(', ');
+        }
+      }
+
+      if (address.isNotEmpty) {
+        _currentAddress = address;
+      } else {
+        _currentAddress = "${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}";
+      }
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Lỗi lấy địa chỉ: $e');
+      _currentAddress = "${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}";
+      notifyListeners();
+    }
+  }
+
   Future<void> _fetchCurrentLocationAndLoad() async {
     if (_isLoading) return;
     _isLoading = true;
     notifyListeners();
 
     try {
-      // Sử dụng Future.timeout để đảm bảo không bị treo vĩnh viễn (đặc biệt trên Web)
       Position position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high, 
@@ -61,10 +101,9 @@ class DriverController extends ChangeNotifier {
       ).timeout(const Duration(seconds: 10));
       
       _currentLocation = LatLng(position.latitude, position.longitude);
-      debugPrint('Vị trí cập nhật: ${_currentLocation!.latitude}, ${_currentLocation!.longitude}');
+      await _fetchAddress(position.latitude, position.longitude);
     } catch (e) {
-      debugPrint('Lỗi hoặc Timeout khi lấy vị trí: $e');
-      // Tiếp tục thực hiện lọc đơn hàng dựa trên vị trí cũ hoặc hiện tất cả
+      debugPrint('Lỗi lấy vị trí: $e');
     } finally {
       _filterOrders();
       _isLoading = false;
@@ -76,8 +115,7 @@ class DriverController extends ChangeNotifier {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        debugPrint('Dịch vụ vị trí đang tắt');
-        await _fetchCurrentLocationAndLoad(); // Cố gắng load đơn hàng dù không có vị trí
+        await _fetchCurrentLocationAndLoad();
         return;
       }
 
@@ -95,22 +133,20 @@ class DriverController extends ChangeNotifier {
         return;
       }
       
-      // Load lần đầu khi vào App
       await _fetchCurrentLocationAndLoad();
 
-      // Theo dõi di chuyển Real-time (Cập nhật ngầm)
       _positionSubscription?.cancel();
       _positionSubscription = Geolocator.getPositionStream(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.bestForNavigation, 
-          distanceFilter: 5
+          distanceFilter: 10
         ),
       ).listen((Position position) {
         _currentLocation = LatLng(position.latitude, position.longitude);
+        _fetchAddress(position.latitude, position.longitude);
         _filterOrders();
       });
     } catch (e) {
-      debugPrint('Lỗi khởi tạo vị trí: $e');
       await _fetchCurrentLocationAndLoad();
     }
   }
@@ -118,7 +154,6 @@ class DriverController extends ChangeNotifier {
   Future<String?> acceptOrder(String orderId) async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return 'Chưa đăng nhập';
-
     try {
       await _orderService.acceptOrder(orderId, uid);
       return null;
@@ -142,7 +177,6 @@ class DriverController extends ChangeNotifier {
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      // Nếu bật nhận đơn, tự động tải dữ liệu
       if (willBeOnline) {
         await _fetchCurrentLocationAndLoad();
       }
@@ -165,7 +199,6 @@ class DriverController extends ChangeNotifier {
   }
 
   void _filterOrders() {
-    // TẠM THỜI: Hiện tất cả đơn hàng để test
     _nearbyOrders = List.from(_allOrders);
     notifyListeners();
   }
