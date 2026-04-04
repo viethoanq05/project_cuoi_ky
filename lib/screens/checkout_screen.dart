@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../domain/entities/order_entity.dart';
+import '../domain/entities/order_entity.dart';
 import '../providers/cart_provider.dart';
 import '../providers/checkout_provider.dart';
 import '../providers/user_profile_provider.dart';

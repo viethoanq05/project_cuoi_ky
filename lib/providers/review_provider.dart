@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
-import '../../domain/entities/review_entity.dart';
-import '../../domain/repositories/review_repository_interface.dart';
+import '../domain/entities/review_entity.dart';
+import '../domain/repositories/review_repository_interface.dart';
 
 enum ReviewState { initial, checking, submitting, success, error }
 

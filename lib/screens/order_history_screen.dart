@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../domain/entities/order_entity.dart';
+import '../domain/entities/order_entity.dart';
 import '../providers/order_history_provider.dart';
 import 'order_tracking_screen.dart';
 

@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
-import '../../domain/entities/order_entity.dart';
-import '../../domain/repositories/order_repository_interface.dart';
+import '../domain/entities/order_entity.dart';
+import '../domain/repositories/order_repository_interface.dart';
 
 enum OrderHistoryState { loading, loaded, error, empty }
 

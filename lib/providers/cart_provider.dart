@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import '../../domain/entities/order_entity.dart';
+import '../domain/entities/order_entity.dart';
 
 class CartProvider extends ChangeNotifier {
   final List<OrderItemEntity> _items = [];
