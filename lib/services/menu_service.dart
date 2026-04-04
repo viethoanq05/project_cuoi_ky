@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/food_item.dart';
+import 'supabase_config.dart';
 
 class MenuService {
   MenuService._();
@@ -16,10 +17,6 @@ class MenuService {
 
   static const String _foodsCollection = 'Foods';
   static const String _categoriesCollection = 'Categories';
-  static const String _storageBucket = String.fromEnvironment(
-    'SUPABASE_STORAGE_BUCKET',
-    defaultValue: 'food-images',
-  );
 
   String? get currentStoreId => _auth.currentUser?.uid;
 
@@ -170,20 +167,21 @@ class MenuService {
     }
 
     final SupabaseClient supabase = Supabase.instance.client;
+    final storageBucket = SupabaseConfig.instance.storageBucket;
 
     final safeName = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
     final path =
         'foods/$storeId/${DateTime.now().millisecondsSinceEpoch}_$safeName';
 
     await supabase.storage
-        .from(_storageBucket)
+        .from(storageBucket)
         .uploadBinary(
           path,
           bytes,
           fileOptions: const FileOptions(upsert: true),
         );
 
-    return supabase.storage.from(_storageBucket).getPublicUrl(path);
+    return supabase.storage.from(storageBucket).getPublicUrl(path);
   }
 
   Map<String, dynamic> _sanitizeOptions(Map<String, dynamic> source) {

@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +10,7 @@ import 'firebase_options.dart';
 import 'screens/login_screen.dart';
 import 'screens/role_home_screen.dart';
 import 'services/auth_service.dart';
+import 'services/supabase_config.dart';
 import 'theme/app_theme.dart';
 
 void main() {
@@ -29,8 +33,10 @@ class _BootstrapAppState extends State<_BootstrapApp> {
       options: DefaultFirebaseOptions.currentPlatform,
     ).timeout(const Duration(seconds: 20));
 
-    const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-    const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+    final supabaseConfig = await _loadSupabaseConfig();
+    final supabaseUrl = supabaseConfig['SUPABASE_URL'] as String? ?? '';
+    final supabaseAnonKey = supabaseConfig['SUPABASE_ANON_KEY'] as String? ?? '';
+
     if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
       throw StateError(
         'Supabase chua duoc cau hinh. Hay chay app voi '
@@ -39,12 +45,48 @@ class _BootstrapAppState extends State<_BootstrapApp> {
       );
     }
 
+    SupabaseConfig.instance.load(
+      url: supabaseUrl,
+      anonKey: supabaseAnonKey,
+      storageBucket: supabaseConfig['SUPABASE_STORAGE_BUCKET'] as String? ?? '',
+    );
+
     await Supabase.initialize(
       url: supabaseUrl,
       anonKey: supabaseAnonKey,
     ).timeout(const Duration(seconds: 20));
 
     await AuthService.instance.init().timeout(const Duration(seconds: 10));
+  }
+
+  Future<Map<String, dynamic>> _loadSupabaseConfig() async {
+    const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+    const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+    const supabaseStorageBucket = String.fromEnvironment('SUPABASE_STORAGE_BUCKET');
+
+    if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
+      return {
+        'SUPABASE_URL': supabaseUrl,
+        'SUPABASE_ANON_KEY': supabaseAnonKey,
+        'SUPABASE_STORAGE_BUCKET': supabaseStorageBucket,
+      };
+    }
+
+    try {
+      final jsonString = await rootBundle.loadString('assets/supabase.dev.json');
+      final config = json.decode(jsonString) as Map<String, dynamic>;
+      return {
+        'SUPABASE_URL': config['SUPABASE_URL'] as String? ?? '',
+        'SUPABASE_ANON_KEY': config['SUPABASE_ANON_KEY'] as String? ?? '',
+        'SUPABASE_STORAGE_BUCKET': config['SUPABASE_STORAGE_BUCKET'] as String? ?? '',
+      };
+    } catch (_) {
+      return {
+        'SUPABASE_URL': supabaseUrl,
+        'SUPABASE_ANON_KEY': supabaseAnonKey,
+        'SUPABASE_STORAGE_BUCKET': supabaseStorageBucket,
+      };
+    }
   }
 
   @override
