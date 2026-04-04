@@ -65,7 +65,7 @@ class _DeliveryConfirmationScreenState extends State<DeliveryConfirmationScreen>
       // 2. Cập nhật đơn hàng thành công
       await _orderService.updateOrderStatus(widget.order.orderId, 'delivered', proofImage: imageUrl);
 
-      // 3. Cộng tiền vào ví tài xế (Tổng = Tiền đơn + Tiền ship)
+      // 3. Cộng tiền vào ví tài xế & Lưu lịch sử giao dịch (WalletTransactions)
       final currentUser = _authService.currentUser;
       if (currentUser != null) {
         final totalEarnings = widget.order.totalAmount + widget.order.deliveryFee;
@@ -74,12 +74,25 @@ class _DeliveryConfirmationScreenState extends State<DeliveryConfirmationScreen>
           totalEarnings, 
           true
         );
-        await _authService.updateWalletBalance(newBalance);
+
+        // Chuẩn bị dữ liệu transaction để lưu vào collection WalletTransactions
+        final transactionData = {
+          'orderId': widget.order.orderId,
+          'amount': totalEarnings,
+          'sender': widget.order.customerId, // Người gửi là khách hàng đặt đơn
+          'senderName': widget.order.customerId.substring(0, 8), // Alias tạm nếu chưa có tên
+          'note': 'Nhận tiền từ đơn hàng ${widget.order.orderId}',
+        };
+
+        await _authService.updateWalletBalance(newBalance, transaction: transactionData);
       }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Đơn hàng thành công! +${currencyFormat.format(widget.order.totalAmount + widget.order.deliveryFee)} vào ví')),
+          SnackBar(
+            content: Text('Thành công! +${currencyFormat.format(widget.order.totalAmount + widget.order.deliveryFee)} vào ví'),
+            backgroundColor: Colors.green,
+          ),
         );
         Navigator.pop(context); // Quay lại danh sách đơn hàng
       }

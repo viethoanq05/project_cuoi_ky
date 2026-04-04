@@ -14,6 +14,7 @@ class AuthService extends ChangeNotifier {
 
   static const String _usersCollection = 'Users';
   static const String _userNamesCollection = 'Usernames';
+  static const String _transactionsCollection = 'WalletTransactions';
 
   static const Map<String, dynamic> _defaultDriverInfo = <String, dynamic>{
     'biensoxe': '',
@@ -158,14 +159,32 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  Future<String?> updateWalletBalance(double newBalance) async {
+  Future<String?> updateWalletBalance(double newBalance, {Map<String, dynamic>? transaction}) async {
     final user = _auth.currentUser;
     if (user == null) return 'Chưa đăng nhập';
+    
     try {
-      await _firestore.collection(_usersCollection).doc(user.uid).update({
+      final batch = _firestore.batch();
+      
+      // 1. Cập nhật số dư User
+      final userRef = _firestore.collection(_usersCollection).doc(user.uid);
+      batch.update(userRef, {
         'wallet_balance': newBalance,
         'updatedAt': FieldValue.serverTimestamp(),
       });
+
+      // 2. Nếu có transaction, lưu vào collection WalletTransactions
+      if (transaction != null) {
+        final transRef = _firestore.collection(_transactionsCollection).doc();
+        batch.set(transRef, {
+          ...transaction,
+          'driverId': user.uid,
+          'timestamp': FieldValue.serverTimestamp(),
+          'type': 'receive_order_payment'
+        });
+      }
+
+      await batch.commit();
       _updateCurrentUserLocal(walletBalance: newBalance);
       return null;
     } catch (e) {

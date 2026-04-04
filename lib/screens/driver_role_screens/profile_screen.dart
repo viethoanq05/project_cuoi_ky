@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/app_user.dart';
 import '../../services/auth_service.dart';
-import '../../services/bank_service.dart';
 import 'wallet_screen.dart';
 import 'edit_profile_screen.dart';
 
@@ -17,7 +16,6 @@ class DriverProfileScreen extends StatefulWidget {
 }
 
 class _DriverProfileScreenState extends State<DriverProfileScreen> {
-  bool _isLinking = false;
   final currencyFormat = NumberFormat.currency(locale: 'vi_VN', symbol: 'đ');
 
   Future<void> _confirmLogout(BuildContext context) async {
@@ -45,91 +43,12 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
     }
   }
 
+  /* 
+  // Tạm thời vô hiệu hóa chức năng liên kết ngân hàng
   void _showLinkBankDialog(BuildContext context) {
-    final nameController = TextEditingController();
-    final passwordController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => AlertDialog(
-          title: const Text('Liên kết ngân hàng'),
-          content: Form(
-            key: formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    controller: nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Tên tài khoản ngân hàng',
-                      hintText: 'Nhập tên đăng nhập ngân hàng',
-                    ),
-                    validator: (v) => (v == null || v.isEmpty) ? 'Vui lòng nhập tên' : null,
-                  ),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: passwordController,
-                    decoration: const InputDecoration(
-                      labelText: 'Mật khẩu',
-                    ),
-                    obscureText: true,
-                    validator: (v) => (v == null || v.isEmpty) ? 'Vui lòng nhập mật khẩu' : null,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: _isLinking ? null : () => Navigator.pop(context),
-              child: const Text('Hủy'),
-            ),
-            FilledButton(
-              onPressed: _isLinking ? null : () async {
-                if (formKey.currentState!.validate()) {
-                  setModalState(() => _isLinking = true);
-                  
-                  final result = await BankService.loginBank(
-                    name: nameController.text.trim(),
-                    password: passwordController.text,
-                  );
-
-                  if (!mounted) return;
-
-                  if (result['success'] == true) {
-                    final error = await widget.authService.updateBankInfo(
-                      bankAccount: result['name'],
-                    );
-
-                    if (!mounted) return;
-                    setModalState(() => _isLinking = false);
-                    Navigator.pop(context);
-
-                    if (error == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Liên kết ngân hàng thành công!')),
-                      );
-                    }
-                  } else {
-                    setModalState(() => _isLinking = false);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(result['error'] ?? 'Đăng nhập thất bại')),
-                    );
-                  }
-                }
-              },
-              child: _isLinking 
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Text('Liên kết'),
-            ),
-          ],
-        ),
-      ),
-    );
+    // ... code cũ ...
   }
+  */
 
   @override
   Widget build(BuildContext context) {
@@ -174,6 +93,9 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
                 );
               },
             ),
+            
+            /* 
+            // Tạm thời ẩn nút liên kết ngân hàng
             _buildProfileItem(
               icon: Icons.account_balance_outlined,
               title: 'Tài khoản ngân hàng',
@@ -182,6 +104,8 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
                 : 'Chưa liên kết',
               onTap: () => _showLinkBankDialog(context),
             ),
+            */
+
             _buildProfileItem(
               icon: Icons.phone_outlined,
               title: 'Số điện thoại',
