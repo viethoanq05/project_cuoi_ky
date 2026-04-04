@@ -43,26 +43,21 @@ class StoreManagementService {
   Stream<List<StoreTicket>> watchStoreTickets() {
     final storeId = currentStoreId;
 
-    return _firestore
-        .collection(_ordersCollection)
-        .where('store_id', isEqualTo: storeId)
-        .snapshots()
-        .map((snapshot) {
-          final items = snapshot.docs
-              .where((doc) => _matchesStore(doc.data(), storeId))
-              .map(
-                (doc) => StoreTicket.fromMap(
-                  _normalizeDocumentData(doc.id, doc.data()),
-                ),
-              )
-              .toList();
-          items.sort((left, right) {
-            final rightTime = right.createdAt?.millisecondsSinceEpoch ?? 0;
-            final leftTime = left.createdAt?.millisecondsSinceEpoch ?? 0;
-            return rightTime.compareTo(leftTime);
-          });
-          return items;
-        });
+    return _firestore.collection(_ordersCollection).snapshots().map((snapshot) {
+      final items = snapshot.docs
+          .where((doc) => _matchesStore(doc.data(), storeId))
+          .map(
+            (doc) =>
+                StoreTicket.fromMap(_normalizeDocumentData(doc.id, doc.data())),
+          )
+          .toList();
+      items.sort((left, right) {
+        final rightTime = right.createdAt?.millisecondsSinceEpoch ?? 0;
+        final leftTime = left.createdAt?.millisecondsSinceEpoch ?? 0;
+        return rightTime.compareTo(leftTime);
+      });
+      return items;
+    });
   }
 
   Stream<StoreStats> watchStats() {
@@ -117,7 +112,6 @@ class StoreManagementService {
 
     final snapshot = await _firestore
         .collection(_ordersCollection)
-        .where('store_id', isEqualTo: currentStoreId)
         .where(
           'order_time',
           isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay),
@@ -125,7 +119,10 @@ class StoreManagementService {
         .where('order_time', isLessThan: Timestamp.fromDate(endOfDay))
         .get();
 
-    return snapshot.docs.length;
+    final storeId = currentStoreId;
+    return snapshot.docs
+        .where((doc) => _matchesStore(doc.data(), storeId))
+        .length;
   }
 
   Future<void> updateTicketStatus({

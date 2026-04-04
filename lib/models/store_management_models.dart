@@ -20,6 +20,9 @@ class StoreTicketStatus {
 
   static StoreTicketStatus fromAny(dynamic value) {
     final normalized = value?.toString().trim().toLowerCase() ?? '';
+    if (normalized == 'delivered') {
+      return completed;
+    }
     for (final status in values) {
       if (status.value == normalized) {
         return status;
@@ -53,7 +56,11 @@ class StoreTicket {
                 ? asText(map['customerName'])
                 : 'Khách hàng'),
       totalAmount: asDouble(
-        map['total_amount'] ?? map['total'] ?? map['amount'] ?? map['price'],
+        map['total_amount'] ??
+            map['totalAmount'] ??
+            map['total'] ??
+            map['amount'] ??
+            map['price'],
       ),
       status: StoreTicketStatus.fromAny(map['status'] ?? map['order_status']),
       createdAt: asDateTime(
