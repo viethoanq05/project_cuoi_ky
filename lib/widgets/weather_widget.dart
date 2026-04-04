@@ -52,6 +52,21 @@ class WeatherWidget extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(Icons.location_on, color: Colors.white, size: 14),
+                    const SizedBox(width: 4),
+                    Text(
+                      isWeatherLoaded ? weather!.cityName : 'Đang xác định vị trí...',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
                 Text(
                   isWeatherLoaded 
                       ? '${weather!.temp.toStringAsFixed(1)}°C • ${weather!.description}'

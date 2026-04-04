@@ -60,26 +60,34 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       double lon = 106.7009;
 
       final currentUser = widget.authService.currentUser;
+      
+      // Ưu tiên 1: Tọa độ từ profile (nếu có và hợp lệ)
       if (currentUser != null && currentUser.position != null) {
         lat = currentUser.position!['latitude']!;
         lon = currentUser.position!['longitude']!;
-      } else {
-        // Thử lấy vị trí từ GPS (parallelize location fetch as well if needed)
-        try {
+      } 
+      
+      // Ưu tiên 2: Lấy từ GPS của máy (thực hiện ngay cả khi đã có profile để cập nhật thời tiết thực tế)
+      try {
+        LocationPermission permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied) {
+          permission = await Geolocator.requestPermission();
+        }
+        
+        if (permission == LocationPermission.always || permission == LocationPermission.whileInUse) {
           final position = await Geolocator.getCurrentPosition(
             locationSettings: const LocationSettings(
-              accuracy: LocationAccuracy.low,
+              accuracy: LocationAccuracy.best,
             ),
           ).timeout(const Duration(seconds: 5));
           lat = position.latitude;
           lon = position.longitude;
-        } catch (_) {
-          // Dùng vị trí mặc định nếu không lấy được GPS
         }
+      } catch (e) {
+        debugPrint('GPS Fetch error: $e. Using fallback/profile coordinates.');
       }
 
       // 2. Chạy lấy các luồng dữ liệu song song (thời tiết, cửa hàng, món ăn)
-      // Sử dụng catchError cho từng future để một tiến trình lỗi không làm dừng toàn bộ
       final results = await Future.wait([
         _recommendationService.getWeatherData(lat, lon).catchError((e) {
           debugPrint('Error fetching weather: $e');
@@ -129,7 +137,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           _currentWeather = weather;
           _userLat = lat;
           _userLon = lon;
-          _stores = recommended; // Use stores with calculated distances
+          _stores = recommended;
           _recommendedStores = recommended;
           _allDistanceSuggestions = foodSuggestions;
           _allFoods = allFoods;

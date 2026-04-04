@@ -11,12 +11,14 @@ class WeatherData {
   final double temp;
   final String description;
   final String iconCode;
+  final String cityName;
 
   WeatherData({
     required this.condition,
     required this.temp,
     required this.description,
     required this.iconCode,
+    required this.cityName,
   });
 
   String get iconUrl => 'https://openweathermap.org/img/wn/$iconCode@2x.png';
@@ -24,6 +26,10 @@ class WeatherData {
 
 class RecommendationService {
   static final RecommendationService _instance = RecommendationService._internal();
+  
+  // Cache để tránh gọi API quá nhiều lần và giữ dự báo ổn định
+  final Map<String, _WeatherCacheEntry> _weatherCache = {};
+  static const Duration _cacheDuration = Duration(minutes: 30);
 
   factory RecommendationService() {
     return _instance;
@@ -94,7 +100,18 @@ class RecommendationService {
   // Lấy dữ liệu thời tiết chi tiết từ OpenWeatherMap
   Future<WeatherData?> getWeatherData(double latitude, double longitude) async {
     try {
-      // Sử dụng OpenWeatherMap API
+      // 1. Kiểm tra Cache (làm tròn tọa độ tới 2 chữ số thập phân ~1km để dùng chung cache)
+      final cacheKey = '${latitude.toStringAsFixed(2)},${longitude.toStringAsFixed(2)}';
+      final now = DateTime.now();
+      
+      if (_weatherCache.containsKey(cacheKey)) {
+        final entry = _weatherCache[cacheKey]!;
+        if (now.difference(entry.timestamp) < _cacheDuration) {
+          return entry.data;
+        }
+      }
+
+      // 2. Gọi API nếu không có cache hoặc cache hết hạn
       const apiKey = 'b704cff89bc96af48c452f7a03cc433d';
       final url =
           'https://api.openweathermap.org/data/2.5/weather?lat=$latitude&lon=$longitude&appid=$apiKey&units=metric&lang=vi';
@@ -106,12 +123,17 @@ class RecommendationService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return WeatherData(
+        final weather = WeatherData(
           condition: data['weather'][0]['main'],
           temp: (data['main']['temp'] as num).toDouble(),
           description: data['weather'][0]['description'],
           iconCode: data['weather'][0]['icon'],
+          cityName: data['name'] ?? 'Vị trí hiện tại',
         );
+
+        // Lưu vào cache
+        _weatherCache[cacheKey] = _WeatherCacheEntry(data: weather, timestamp: now);
+        return weather;
       }
       return null;
     } catch (e) {
@@ -280,4 +302,11 @@ class RecommendationService {
     }
     return str;
   }
+}
+
+class _WeatherCacheEntry {
+  final WeatherData data;
+  final DateTime timestamp;
+
+  _WeatherCacheEntry({required this.data, required this.timestamp});
 }

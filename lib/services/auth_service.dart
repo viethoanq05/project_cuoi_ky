@@ -369,7 +369,11 @@ class AuthService extends ChangeNotifier {
     final address = _asTrimmedString(data?['address']).isNotEmpty
         ? _asTrimmedString(data?['address'])
         : _asTrimmedString(data?['location']);
-    final position = _asPositionMap(data?['position']);
+    final position = _asPositionMap(data?['position']) ?? 
+                    _asPositionMap({
+                      'latitude': data?['latitude'],
+                      'longitude': data?['longitude'],
+                    });
     final profileCompleted = _asBool(data?['profile_completed']);
 
     bool isStoreOpen = false;
@@ -622,6 +626,8 @@ class AuthService extends ChangeNotifier {
       try {
         final lat = value['latitude'];
         final lon = value['longitude'];
+        if (lat == null || lon == null) return null;
+        
         return {
           'latitude': (lat is num) ? lat.toDouble() : double.parse(lat.toString()),
           'longitude': (lon is num) ? lon.toDouble() : double.parse(lon.toString()),
