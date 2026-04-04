@@ -29,15 +29,20 @@ class Category {
     };
   }
 
-  factory Category.fromMap(Map<String, dynamic> map) {
+  factory Category.fromMap(Map<String, dynamic> map, {String? docId}) {
+    final id = (map['category_id']?.toString() ?? 
+               map['categoryId']?.toString() ?? 
+               map['id']?.toString() ?? 
+               docId ?? '').trim();
+
     return Category(
-      categoryId: map['categoryId'] as String,
-      storeId: map['storeId'] as String,
-      name: map['name'] as String,
+      categoryId: id,
+      storeId: (map['store_id'] ?? map['storeId'] ?? '').toString().trim(),
+      name: (map['name'] ?? map['category_name'] ?? '').toString().trim(),
       description: map['description'] as String?,
       icon: map['icon'] as String?,
-      displayOrder: map['displayOrder'] as int,
-      isActive: map['isActive'] as bool? ?? true,
+      displayOrder: (map['displayOrder'] ?? map['display_order'] ?? 0) as int,
+      isActive: map['isActive'] as bool? ?? map['is_active'] as bool? ?? true,
     );
   }
 

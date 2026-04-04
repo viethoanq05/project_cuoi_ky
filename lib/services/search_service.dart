@@ -113,11 +113,11 @@ class SearchService {
       Query foodQuery = _firestore.collection('Foods');
 
       if (storeId != null) {
-        foodQuery = foodQuery.where('storeId', isEqualTo: storeId);
+        foodQuery = foodQuery.where('store_id', isEqualTo: storeId);
       }
 
       if (categoryId != null) {
-        foodQuery = foodQuery.where('categoryId', isEqualTo: categoryId);
+        foodQuery = foodQuery.where('category_id', isEqualTo: categoryId);
       }
 
       final snapshot = await foodQuery.get();
@@ -132,7 +132,7 @@ class SearchService {
           })
           .map((doc) {
             final data = doc.data() as Map<String, dynamic>;
-            return FoodItem.fromMap({...data, 'foodId': doc.id});
+            return FoodItem.fromMap(data, docId: doc.id);
           })
           .toList();
 
@@ -150,11 +150,11 @@ class SearchService {
     try {
       Query query = _firestore
           .collection('Foods')
-          .where('categoryId', isEqualTo: categoryId)
-          .where('isAvailable', isEqualTo: true);
+          .where('category_id', isEqualTo: categoryId)
+          .where('is_available', isEqualTo: true);
 
       if (storeId != null) {
-        query = query.where('storeId', isEqualTo: storeId);
+        query = query.where('store_id', isEqualTo: storeId);
       }
 
       final snapshot = await query.get();
@@ -162,7 +162,7 @@ class SearchService {
       return snapshot.docs
           .map((doc) {
             final data = doc.data() as Map<String, dynamic>;
-            return FoodItem.fromMap({...data, 'foodId': doc.id});
+            return FoodItem.fromMap(data, docId: doc.id);
           })
           .toList();
     } catch (e) {
@@ -191,7 +191,7 @@ class SearchService {
       return snapshot.docs
           .map((doc) {
             final data = doc.data() as Map<String, dynamic>;
-            return FoodItem.fromMap({...data, 'foodId': doc.id});
+            return FoodItem.fromMap(data, docId: doc.id);
           })
           .where((f) => f.isAvailable) // Lọc thủ công để tránh lỗi index
           .toList();
@@ -211,7 +211,7 @@ class SearchService {
           .where('avgRating', isGreaterThanOrEqualTo: minRating);
 
       if (storeId != null) {
-        query = query.where('storeId', isEqualTo: storeId);
+        query = query.where('store_id', isEqualTo: storeId);
       }
 
       final snapshot = await query.get();
@@ -219,7 +219,7 @@ class SearchService {
       return snapshot.docs
           .map((doc) {
             final data = doc.data() as Map<String, dynamic>;
-            return FoodItem.fromMap({...data, 'foodId': doc.id});
+            return FoodItem.fromMap(data, docId: doc.id);
           })
           .where((f) => f.isAvailable) // Lọc thủ công để tránh lỗi index
           .toList();
@@ -236,8 +236,8 @@ class SearchService {
     try {
       final snapshot = await _firestore
           .collection('Foods')
-          .where('storeId', isEqualTo: storeId)
-          .where('isAvailable', isEqualTo: true)
+          .where('store_id', isEqualTo: storeId)
+          .where('is_available', isEqualTo: true)
           .get();
 
       final foods = snapshot.docs
@@ -248,7 +248,7 @@ class SearchService {
           })
           .map((doc) {
             final data = doc.data() as Map<String, dynamic>;
-            return FoodItem.fromMap({...data, 'foodId': doc.id});
+            return FoodItem.fromMap(data, docId: doc.id);
           })
           .toList();
 
@@ -271,7 +271,7 @@ class SearchService {
       return snapshot.docs
           .map((doc) {
             final data = doc.data() as Map<String, dynamic>;
-            return FoodItem.fromMap({...data, 'foodId': doc.id});
+            return FoodItem.fromMap(data, docId: doc.id);
           })
           .where((f) => f.isAvailable) // Lọc thủ công để tránh lỗi index
           .toList();
@@ -292,7 +292,7 @@ class SearchService {
       return snapshot.docs
           .map((doc) {
             final data = doc.data() as Map<String, dynamic>;
-            return FoodItem.fromMap({...data, 'foodId': doc.id});
+            return FoodItem.fromMap(data, docId: doc.id);
           })
           .where((f) => f.isAvailable) // Lọc thủ công để tránh lỗi index
           .toList();

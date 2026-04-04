@@ -125,8 +125,9 @@ class RecommendationService {
     List<FoodItem> foods,
     List<StoreInfo> stores,
     double userLat,
-    double userLon,
-  ) async {
+    double userLon, {
+    int limit = 20,
+  }) async {
     try {
       if (foods.isEmpty || stores.isEmpty) return foods;
 
@@ -144,10 +145,15 @@ class RecommendationService {
       }
 
       foodWithDistance.sort((a, b) => a.value.compareTo(b.value));
-      return foodWithDistance.map((e) => e.key).take(20).toList();
+      
+      if (limit > 0) {
+        return foodWithDistance.map((e) => e.key).take(limit).toList();
+      } else {
+        return foodWithDistance.map((e) => e.key).toList();
+      }
     } catch (e) {
       debugPrint('Error getting distance-based recommendations: $e');
-      return foods.take(10).toList();
+      return foods.take(limit > 0 ? limit : 10).toList();
     }
   }
 

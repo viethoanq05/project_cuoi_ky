@@ -35,11 +35,14 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   List<StoreInfo> _recommendedStores = [];
   List<FoodItem> _distanceSuggestions = [];
   List<FoodItem> _allDistanceSuggestions = []; // Raw data before filtering
+  List<FoodItem> _allFoods = []; // Store the full list of foods
   List<model.Category> _categories = [];
   WeatherData? _currentWeather;
   List<FoodItem> _weatherRecommendations = [];
   bool _isLoading = true;
   String? _selectedCategory;
+  double _userLat = 10.7769;
+  double _userLon = 106.7009;
 
   @override
   void initState() {
@@ -124,9 +127,12 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       if (mounted) {
         setState(() {
           _currentWeather = weather;
-          _stores = allStores;
+          _userLat = lat;
+          _userLon = lon;
+          _stores = recommended; // Use stores with calculated distances
           _recommendedStores = recommended;
           _allDistanceSuggestions = foodSuggestions;
+          _allFoods = allFoods;
           _weatherRecommendations = weatherRecommendations;
           _categories = categories;
           _applyFilters();
@@ -370,19 +376,45 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   }
 
   void _applyFilters() {
-    List<FoodItem> filtered = List.from(_allDistanceSuggestions);
-
-    // 1. Lọc theo danh mục (nếu có chọn)
-    if (_selectedCategory != null) {
-      // Tìm category name tương ứng với ID nếu cần, hoặc lọc trực tiếp ID
-      filtered = filtered.where((f) {
-        // Hỗ trợ cả lọc theo ID hoặc theo Name để tránh sai sót dữ liệu
-        return f.categoryId == _selectedCategory || 
-               _categories.any((c) => c.categoryId == _selectedCategory && c.name == f.categoryId);
+    if (_selectedCategory == null) {
+      _distanceSuggestions = List.from(_allDistanceSuggestions);
+    } else {
+      final selectedId = _selectedCategory!.trim().toLowerCase();
+      
+      // 1. Lọc tất cả các món ăn theo danh mục
+      List<FoodItem> filteredByCategory = _allFoods.where((f) {
+        final foodCatId = f.categoryId.trim().toLowerCase();
+        
+        // So khớp trực tiếp ID
+        if (foodCatId == selectedId) return true;
+        
+        // So khớp tên danh mục (trong trường hợp categoryId của food là tên tiếng Việt)
+        return _categories.any((c) => 
+          c.categoryId.trim().toLowerCase() == selectedId && 
+          c.name.trim().toLowerCase() == foodCatId
+        );
       }).toList();
-    }
 
-    _distanceSuggestions = filtered;
+      // Debug: In ra số lượng tìm thấy để kiểm tra
+      debugPrint('Filtering for category: $selectedId. Found: ${filteredByCategory.length} items out of ${_allFoods.length}');
+
+      // 2. Tính toán khoảng cách và sắp xếp lại các món trong danh mục này
+      final Map<String, double> storeDistances = {};
+      for (var store in _stores) {
+        storeDistances[store.storeId] = store.distance ?? 999;
+      }
+
+      final List<MapEntry<FoodItem, double>> foodWithDistance = [];
+      for (var food in filteredByCategory) {
+        final dist = storeDistances[food.storeId] ?? 999;
+        foodWithDistance.add(MapEntry(food, dist));
+      }
+
+      foodWithDistance.sort((a, b) => a.value.compareTo(b.value));
+      
+      // Lấy top 50 món ăn gần nhất của danh mục này
+      _distanceSuggestions = foodWithDistance.map((e) => e.key).take(50).toList();
+    }
   }
 
   Widget _buildCategorySection(BuildContext context) {

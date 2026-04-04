@@ -32,10 +32,10 @@ class CategoryService {
         return _getDefaultCategories();
       }
 
-      return docs.map((doc) => Category.fromMap({
-        ...doc.data(),
-        'categoryId': doc.id,
-      })).toList();
+      return docs.map((doc) => Category.fromMap(
+        doc.data(),
+        docId: doc.id,
+      )).toList();
     } catch (e) {
       debugPrint('Error fetching categories: $e');
       return _getDefaultCategories();
@@ -45,10 +45,10 @@ class CategoryService {
   List<Category> _getDefaultCategories() {
     return [
       Category(categoryId: 'com', storeId: 'system', name: 'Cơm', displayOrder: 1, icon: 'lunch_dining'),
-      Category(categoryId: 'mi', storeId: 'system', name: 'Mì', displayOrder: 2, icon: 'ramen_dining'),
-      Category(categoryId: 'banh', storeId: 'system', name: 'Bánh', displayOrder: 3, icon: 'bakery_dining'),
-      Category(categoryId: 'nuoc', storeId: 'system', name: 'Đồ uống', displayOrder: 4, icon: 'local_drink'),
-      Category(categoryId: 'trangmieng', storeId: 'system', name: 'Tráng miệng', displayOrder: 5, icon: 'icecream'),
+      Category(categoryId: 'bunmipho', storeId: 'system', name: 'Bún, Mì, Phở', displayOrder: 2, icon: 'ramen_dining'),
+      Category(categoryId: 'doanvat', storeId: 'system', name: 'Đồ ăn vặt', displayOrder: 3, icon: 'fastfood'),
+      Category(categoryId: 'douong', storeId: 'system', name: 'Đồ uống', displayOrder: 4, icon: 'local_drink'),
+      Category(categoryId: 'banhmy', storeId: 'system', name: 'Bánh mì', displayOrder: 5, icon: 'bakery_dining'),
     ];
   }
 
@@ -67,13 +67,12 @@ class CategoryService {
   }
 
   Color getCategoryColor(String name) {
-    switch (name.toLowerCase()) {
-      case 'cơm': return Colors.orange.shade100;
-      case 'mì': return Colors.yellow.shade100;
-      case 'bánh': return Colors.brown.shade100;
-      case 'đồ uống': return Colors.blue.shade100;
-      case 'tráng miệng': return Colors.pink.shade100;
-      default: return Colors.green.shade100;
-    }
+    final n = name.toLowerCase();
+    if (n.contains('cơm')) return Colors.orange.shade100;
+    if (n.contains('mì') || n.contains('bún') || n.contains('phở')) return Colors.yellow.shade100;
+    if (n.contains('vặt')) return Colors.green.shade100;
+    if (n.contains('uống') || n.contains('nước')) return Colors.blue.shade100;
+    if (n.contains('bánh')) return Colors.brown.shade100;
+    return Colors.green.shade100;
   }
 }
