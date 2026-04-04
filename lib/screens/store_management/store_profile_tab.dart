@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
@@ -26,7 +28,9 @@ class _StoreProfileTabState extends State<StoreProfileTab> {
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _openingHoursController = TextEditingController();
   LatLng? _selectedLocation;
+  String _storeImageUrl = '';
   bool _isResolvingAddress = false;
+  bool _isUploadingImage = false;
   bool _isSaving = false;
 
   @override
@@ -65,6 +69,7 @@ class _StoreProfileTabState extends State<StoreProfileTab> {
           phoneController: _phoneController,
           addressController: _addressController,
           openingHoursController: _openingHoursController,
+          header: _buildImageSection(),
           locationPicker: _buildLocationPicker(),
           isSaving: _isSaving,
           onSave: _updateProfile,
@@ -82,6 +87,7 @@ class _StoreProfileTabState extends State<StoreProfileTab> {
     _storeNameController.text = profile.storeName;
     _phoneController.text = profile.phone;
     _openingHoursController.text = profile.openingHours;
+    _storeImageUrl = profile.imageUrl;
     _selectedLocation = initialPoint;
 
     final rawAddress = profile.address.trim();
@@ -92,6 +98,135 @@ class _StoreProfileTabState extends State<StoreProfileTab> {
     }
 
     return profile;
+  }
+
+  Widget _buildImageSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Ảnh quán', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            height: 170,
+            width: double.infinity,
+            child: _storeImageUrl.trim().isEmpty
+                ? Container(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerHighest,
+                    child: Icon(
+                      Icons.storefront_outlined,
+                      size: 56,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  )
+                : Image.network(
+                    _storeImageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.surfaceContainerHighest,
+                        child: const Center(
+                          child: Icon(Icons.broken_image_outlined, size: 40),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        FilledButton.icon(
+          onPressed: _isUploadingImage ? null : _pickAndUploadStoreImage,
+          icon: _isUploadingImage
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.upload_file_outlined),
+          label: Text(
+            _storeImageUrl.trim().isEmpty
+                ? 'Upload ảnh quán'
+                : 'Upload lại ảnh',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickAndUploadStoreImage() async {
+    if (_isUploadingImage) {
+      return;
+    }
+
+    XFile? picked;
+    try {
+      final picker = ImagePicker();
+      picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+        maxWidth: 1600,
+      );
+    } on MissingPluginException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Image picker chưa được khởi tạo. Hãy tắt app và chạy lại.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    if (picked == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _isUploadingImage = true;
+    });
+
+    try {
+      final bytes = await picked.readAsBytes();
+      final extension = picked.name.contains('.')
+          ? picked.name.split('.').last
+          : 'jpg';
+      final url = await context.read<StoreManagementService>().uploadStoreImage(
+        bytes: bytes,
+        fileExtension: extension,
+      );
+      await context.read<StoreManagementService>().updateStoreImageUrl(url);
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _storeImageUrl = url;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Upload ảnh quán thành công')),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload ảnh quán thất bại: $error')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploadingImage = false;
+        });
+      }
+    }
   }
 
   Future<LatLng> _initialLocationFromProfile(StoreProfile profile) async {
@@ -293,6 +428,7 @@ class _StoreProfileTabState extends State<StoreProfileTab> {
         phone: _phoneController.text.trim(),
         address: _addressController.text.trim(),
         openingHours: _openingHoursController.text.trim(),
+        imageUrl: _storeImageUrl.trim(),
         latitude: _selectedLocation?.latitude,
         longitude: _selectedLocation?.longitude,
       );

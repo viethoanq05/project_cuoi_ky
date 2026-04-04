@@ -51,6 +51,8 @@ class StoreDashboardTab extends StatelessWidget {
             return ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                const _StoreOverviewCard(),
+                const SizedBox(height: 16),
                 _buildStatsSection(stats),
                 const SizedBox(height: 16),
                 _OverviewBarChartCard(stats: stats),
@@ -154,6 +156,87 @@ class StoreDashboardTab extends StatelessWidget {
               if (i != cards.length - 1) const SizedBox(height: 12),
             ],
           ],
+        );
+      },
+    );
+  }
+}
+
+class _StoreOverviewCard extends StatelessWidget {
+  const _StoreOverviewCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final service = context.read<StoreManagementService>();
+    final theme = Theme.of(context);
+
+    return StreamBuilder<StoreProfile>(
+      stream: service.watchStoreProfile(),
+      builder: (context, snapshot) {
+        final profile = snapshot.data ?? StoreProfile.empty;
+        final imageUrl = profile.imageUrl.trim();
+
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: SizedBox(
+                    width: 76,
+                    height: 76,
+                    child: imageUrl.isEmpty
+                        ? Container(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            child: Icon(
+                              Icons.storefront_outlined,
+                              color: theme.colorScheme.primary,
+                            ),
+                          )
+                        : Image.network(
+                            imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color:
+                                    theme.colorScheme.surfaceContainerHighest,
+                                child: const Icon(Icons.broken_image_outlined),
+                              );
+                            },
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        profile.storeName.trim().isEmpty
+                            ? 'Cửa hàng của bạn'
+                            : profile.storeName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        profile.address.trim().isEmpty
+                            ? 'Chưa cập nhật địa chỉ'
+                            : profile.address,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         );
       },
     );

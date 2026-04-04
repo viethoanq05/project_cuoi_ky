@@ -23,6 +23,14 @@ class StoreManagementService {
   static const String _ordersCollection = 'Orders';
   static const String _reviewsCollection = 'Reviews';
   static const String _usersCollection = 'Users';
+  static const String _storeImageBucket = String.fromEnvironment(
+    'SUPABASE_STORE_STORAGE_BUCKET',
+    defaultValue: '',
+  );
+  static const String _fallbackImageBucket = String.fromEnvironment(
+    'SUPABASE_STORAGE_BUCKET',
+    defaultValue: 'food-images',
+  );
 
   String get currentStoreId {
     final id = _firebaseAuth.currentUser?.uid.trim() ?? '';
@@ -198,6 +206,25 @@ class StoreManagementService {
     return StoreProfile.empty;
   }
 
+  Stream<StoreProfile> watchStoreProfile() {
+    final storeId = currentStoreId;
+
+    return _firestore.collection(_usersCollection).doc(storeId).snapshots().map(
+      (snapshot) {
+        if (!snapshot.exists) {
+          return StoreProfile.empty;
+        }
+
+        return StoreProfile.fromMap(
+          _normalizeDocumentData(
+            snapshot.id,
+            snapshot.data() ?? <String, dynamic>{},
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> updateStoreProfile(
     StoreProfile profile, {
     double? latitude,
@@ -212,6 +239,15 @@ class StoreManagementService {
     final currentData = currentDoc.data() ?? <String, dynamic>{};
 
     final normalizedStoreInfo = _extractStoreInfoMap(currentData);
+    final currentImageUrl = _asText(
+      currentData['image_url'] ??
+          currentData['imageUrl'] ??
+          normalizedStoreInfo['image_url'] ??
+          normalizedStoreInfo['imageUrl'],
+    );
+    final nextImageUrl = profile.imageUrl.trim().isNotEmpty
+        ? profile.imageUrl.trim()
+        : currentImageUrl;
     final resolvedLocation = (latitude != null && longitude != null)
         ? _ResolvedLocation(latitude, longitude)
         : await _resolveLocation(
@@ -226,6 +262,7 @@ class StoreManagementService {
       'phone': profile.phone.trim(),
       'address': profile.address.trim(),
       'opening_hours': profile.openingHours.trim(),
+      if (nextImageUrl.isNotEmpty) 'image_url': nextImageUrl,
       'latitude': resolvedLocation.latitude,
       'longitude': resolvedLocation.longitude,
       'position': _formatPosition(
@@ -243,6 +280,7 @@ class StoreManagementService {
     final payload = <String, dynamic>{
       'fullName': profile.storeName.trim(),
       ...profile.toMap(),
+      if (nextImageUrl.isNotEmpty) 'image_url': nextImageUrl,
       'latitude': resolvedLocation.latitude,
       'longitude': resolvedLocation.longitude,
       'position': _formatPosition(
@@ -258,6 +296,21 @@ class StoreManagementService {
         .collection(_usersCollection)
         .doc(storeId)
         .set(payload, SetOptions(merge: true));
+  }
+
+  Future<void> updateStoreImageUrl(String imageUrl) async {
+    final storeId = currentStoreId;
+    final trimmed = imageUrl.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+
+    await _firestore.collection(_usersCollection).doc(storeId).set({
+      'image_url': trimmed,
+      'imageUrl': trimmed,
+      'updated_at': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   Map<String, dynamic> _extractStoreInfoMap(Map<String, dynamic> raw) {
@@ -311,6 +364,13 @@ class StoreManagementService {
     return 0;
   }
 
+  String _asText(dynamic value) {
+    if (value == null) {
+      return '';
+    }
+    return value.toString().trim();
+  }
+
   String _formatPosition(double latitude, double longitude) {
     final latDirection = latitude >= 0 ? 'N' : 'S';
     final lngDirection = longitude >= 0 ? 'E' : 'W';
@@ -322,23 +382,60 @@ class StoreManagementService {
   Future<String> uploadStoreImage({
     required Uint8List bytes,
     required String fileExtension,
-    String bucket = 'store-images',
+    String? bucket,
   }) async {
     final storeId = currentStoreId;
+
     final sanitizedExt = fileExtension.toLowerCase().replaceAll('.', '').trim();
     final ext = sanitizedExt.isEmpty ? 'jpg' : sanitizedExt;
     final path =
         'stores/$storeId/profile_${DateTime.now().millisecondsSinceEpoch}.$ext';
+    final preferredBucket = (bucket ?? _storeImageBucket).trim().isNotEmpty
+        ? (bucket ?? _storeImageBucket).trim()
+        : _fallbackImageBucket;
 
-    await _supabase.storage
-        .from(bucket)
-        .uploadBinary(
-          path,
-          bytes,
-          fileOptions: const FileOptions(upsert: false),
-        );
+    try {
+      await _supabase.storage
+          .from(preferredBucket)
+          .uploadBinary(
+            path,
+            bytes,
+            fileOptions: const FileOptions(upsert: false),
+          );
+      return _supabase.storage.from(preferredBucket).getPublicUrl(path);
+    } on StorageException catch (error) {
+      final shouldRetryWithFallback =
+          preferredBucket != _fallbackImageBucket && error.statusCode == '404';
+      if (!shouldRetryWithFallback) {
+        if (error.statusCode == '403') {
+          throw StateError(
+            'Supabase Storage dang chan upload (403 Unauthorized). '
+            'Can them policy INSERT cho bucket "$preferredBucket" (hoac "$_fallbackImageBucket") '
+            'va folder stores/.',
+          );
+        }
+        rethrow;
+      }
 
-    return _supabase.storage.from(bucket).getPublicUrl(path);
+      try {
+        await _supabase.storage
+            .from(_fallbackImageBucket)
+            .uploadBinary(
+              path,
+              bytes,
+              fileOptions: const FileOptions(upsert: false),
+            );
+        return _supabase.storage.from(_fallbackImageBucket).getPublicUrl(path);
+      } on StorageException catch (fallbackError) {
+        if (fallbackError.statusCode == '403') {
+          throw StateError(
+            'Supabase Storage dang chan upload (403 Unauthorized). '
+            'Can them policy INSERT cho bucket "$_fallbackImageBucket" va folder stores/.',
+          );
+        }
+        rethrow;
+      }
+    }
   }
 
   Map<String, dynamic> _normalizeDocumentData(

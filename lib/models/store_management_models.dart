@@ -140,6 +140,7 @@ class StoreProfile {
     required this.phone,
     required this.address,
     required this.openingHours,
+    required this.imageUrl,
     this.latitude,
     this.longitude,
   });
@@ -148,6 +149,7 @@ class StoreProfile {
   final String phone;
   final String address;
   final String openingHours;
+  final String imageUrl;
   final double? latitude;
   final double? longitude;
 
@@ -163,6 +165,10 @@ class StoreProfile {
     final inferredOpeningHours = asText(storeInfo['opening_hours']).isNotEmpty
         ? asText(storeInfo['opening_hours'])
         : asText(storeInfo['hours']);
+
+    final inferredImageUrl = asText(storeInfo['image_url']).isNotEmpty
+        ? asText(storeInfo['image_url'])
+        : asText(storeInfo['imageUrl']);
 
     return StoreProfile(
       storeName: asText(map['store_name']).isNotEmpty
@@ -185,6 +191,11 @@ class StoreProfile {
           : (asText(map['hours']).isNotEmpty
                 ? asText(map['hours'])
                 : inferredOpeningHours),
+      imageUrl: asText(map['image_url']).isNotEmpty
+          ? asText(map['image_url'])
+          : (asText(map['imageUrl']).isNotEmpty
+                ? asText(map['imageUrl'])
+                : inferredImageUrl),
       latitude: asNullableDouble(map['latitude'] ?? storeInfo['latitude']),
       longitude: asNullableDouble(map['longitude'] ?? storeInfo['longitude']),
     );
@@ -196,6 +207,7 @@ class StoreProfile {
       'phone': phone.trim(),
       'address': address.trim(),
       'opening_hours': openingHours.trim(),
+      'image_url': imageUrl.trim(),
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
     };
@@ -206,6 +218,7 @@ class StoreProfile {
     phone: '',
     address: '',
     openingHours: '',
+    imageUrl: '',
     latitude: null,
     longitude: null,
   );

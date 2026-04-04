@@ -7,6 +7,7 @@ class StoreProfileForm extends StatelessWidget {
     required this.phoneController,
     required this.addressController,
     required this.openingHoursController,
+    this.header,
     this.onSave,
     this.isSaving = false,
     this.isEditable = true,
@@ -17,6 +18,7 @@ class StoreProfileForm extends StatelessWidget {
   final TextEditingController phoneController;
   final TextEditingController addressController;
   final TextEditingController openingHoursController;
+  final Widget? header;
   final Future<void> Function()? onSave;
   final bool isSaving;
   final bool isEditable;
@@ -27,6 +29,7 @@ class StoreProfileForm extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        if (header != null) ...[header!, const SizedBox(height: 12)],
         TextField(
           controller: storeNameController,
           readOnly: !isEditable,

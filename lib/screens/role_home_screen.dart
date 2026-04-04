@@ -703,6 +703,89 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
     return _firestore.collection(_usersCollection).doc(uid);
   }
 
+  Widget _buildStoreHeaderAvatar(String? uid) {
+    if (uid == null || uid.trim().isEmpty) {
+      return _buildStoreHeaderFallbackAvatar();
+    }
+
+    return StreamBuilder<String>(
+      stream: _watchStoreImageUrl(uid),
+      builder: (context, snapshot) {
+        final imageUrl = snapshot.data?.trim() ?? '';
+        if (imageUrl.isEmpty) {
+          return _buildStoreHeaderFallbackAvatar();
+        }
+
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            width: 40,
+            height: 40,
+            child: Image.network(
+              imageUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => _buildStoreHeaderFallbackAvatar(),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStoreHeaderFallbackAvatar() {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Icon(Icons.storefront_rounded, color: Colors.white),
+    );
+  }
+
+  Stream<String> _watchStoreImageUrl(String uid) {
+    return _userDoc(uid).snapshots().map((snap) {
+      final data = snap.data();
+      if (data == null) {
+        return '';
+      }
+
+      final rootImage = _asTrimmedText(data['image_url'] ?? data['imageUrl']);
+      if (rootImage.isNotEmpty) {
+        return rootImage;
+      }
+
+      final info = _extractStoreInfo(data['store_info']);
+      return _asTrimmedText(info['image_url'] ?? info['imageUrl']);
+    });
+  }
+
+  Map<String, dynamic> _extractStoreInfo(dynamic value) {
+    if (value is List &&
+        value.isNotEmpty &&
+        value.first is Map<String, dynamic>) {
+      return Map<String, dynamic>.from(value.first as Map<String, dynamic>);
+    }
+
+    if (value is Map<String, dynamic>) {
+      final first = value['0'];
+      if (first is Map<String, dynamic>) {
+        return Map<String, dynamic>.from(first);
+      }
+      return value;
+    }
+
+    return const <String, dynamic>{};
+  }
+
+  String _asTrimmedText(dynamic value) {
+    if (value == null) {
+      return '';
+    }
+    return value.toString().trim();
+  }
+
   Stream<Map<String, dynamic>?> _watchDriverInfo(String uid) {
     return _userDoc(uid).snapshots().map((snap) {
       final data = snap.data();
@@ -1416,6 +1499,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
     final storeName = user.fullName.trim().isNotEmpty
         ? user.fullName.trim()
         : (user.userName.trim().isNotEmpty ? user.userName.trim() : user.email);
+    final storeUid = _firebaseAuth.currentUser?.uid;
 
     return Scaffold(
       appBar: AppBar(
@@ -1474,18 +1558,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
               ),
               child: Row(
                 children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.storefront_rounded,
-                      color: Colors.white,
-                    ),
-                  ),
+                  _buildStoreHeaderAvatar(storeUid),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
