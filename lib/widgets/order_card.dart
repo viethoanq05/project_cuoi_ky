@@ -5,7 +5,7 @@ import '../models/order.dart';
 import '../services/user_service.dart';
 import '../controller/driver_controller.dart';
 import '../theme/app_colors.dart';
-import 'order_detail_sheet.dart';
+import '../screens/driver_role_screens/order_detail_screen.dart';
 
 class OrderCard extends StatefulWidget {
   final OrderData order;
@@ -66,13 +66,13 @@ class _OrderCardState extends State<OrderCard> {
         child: InkWell(
           onTap: widget.onTap ?? () {
             final driverController = Provider.of<DriverController>(context, listen: false);
-            showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              backgroundColor: Colors.transparent,
-              builder: (context) => ChangeNotifierProvider.value(
-                value: driverController,
-                child: OrderDetailSheet(order: widget.order),
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ChangeNotifierProvider.value(
+                  value: driverController,
+                  child: OrderDetailScreen(order: widget.order),
+                ),
               ),
             );
           },
