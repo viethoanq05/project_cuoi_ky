@@ -4,6 +4,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../../models/order.dart';
 import '../../services/order_service.dart';
+import '../../services/auth_service.dart';
+import '../../services/wallet_service.dart';
 
 class DeliveryConfirmationScreen extends StatefulWidget {
   const DeliveryConfirmationScreen({super.key, required this.order});
@@ -16,6 +18,7 @@ class DeliveryConfirmationScreen extends StatefulWidget {
 
 class _DeliveryConfirmationScreenState extends State<DeliveryConfirmationScreen> {
   final OrderService _orderService = OrderService();
+  final AuthService _authService = AuthService.instance;
   final ImagePicker _picker = ImagePicker();
   Uint8List? _imageBytes;
   bool _isUploading = false;
@@ -62,9 +65,21 @@ class _DeliveryConfirmationScreenState extends State<DeliveryConfirmationScreen>
       // 2. Cập nhật đơn hàng thành công
       await _orderService.updateOrderStatus(widget.order.orderId, 'delivered', proofImage: imageUrl);
 
+      // 3. Cộng tiền vào ví tài xế (Tổng = Tiền đơn + Tiền ship)
+      final currentUser = _authService.currentUser;
+      if (currentUser != null) {
+        final totalEarnings = widget.order.totalAmount + widget.order.deliveryFee;
+        final newBalance = WalletService.calculateNewBalance(
+          currentUser.walletBalance, 
+          totalEarnings, 
+          true
+        );
+        await _authService.updateWalletBalance(newBalance);
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Đơn hàng đã được giao thành công!')),
+          SnackBar(content: Text('Đơn hàng thành công! +${currencyFormat.format(widget.order.totalAmount + widget.order.deliveryFee)} vào ví')),
         );
         Navigator.pop(context); // Quay lại danh sách đơn hàng
       }
@@ -81,6 +96,8 @@ class _DeliveryConfirmationScreenState extends State<DeliveryConfirmationScreen>
 
   @override
   Widget build(BuildContext context) {
+    final totalAmount = widget.order.totalAmount + widget.order.deliveryFee;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Xác nhận hoàn thành'),
@@ -93,7 +110,7 @@ class _DeliveryConfirmationScreenState extends State<DeliveryConfirmationScreen>
           children: [
             const Text('Chi tiết đơn hàng', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
             const SizedBox(height: 12),
-            _buildInfoBox(),
+            _buildInfoBox(totalAmount),
             const SizedBox(height: 24),
             const Text('Ảnh minh chứng giao hàng', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 12),
@@ -116,7 +133,7 @@ class _DeliveryConfirmationScreenState extends State<DeliveryConfirmationScreen>
     );
   }
 
-  Widget _buildInfoBox() {
+  Widget _buildInfoBox(double total) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -129,13 +146,16 @@ class _DeliveryConfirmationScreenState extends State<DeliveryConfirmationScreen>
           _infoRow('Khách hàng', widget.order.customerId.substring(0, 8) + '...'),
           _infoRow('Địa chỉ', widget.order.deliveryAddress ?? 'Không rõ'),
           const Divider(),
-          _infoRow('Tổng tiền', currencyFormat.format(widget.order.totalAmount), isBold: true),
+          _infoRow('Tiền đơn hàng', currencyFormat.format(widget.order.totalAmount)),
+          _infoRow('Phí giao hàng', currencyFormat.format(widget.order.deliveryFee)),
+          const SizedBox(height: 4),
+          _infoRow('Tổng thu nhập', currencyFormat.format(total), isBold: true, color: Colors.green),
         ],
       ),
     );
   }
 
-  Widget _infoRow(String label, String value, {bool isBold = false}) {
+  Widget _infoRow(String label, String value, {bool isBold = false, Color? color}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -145,7 +165,11 @@ class _DeliveryConfirmationScreenState extends State<DeliveryConfirmationScreen>
           Flexible(
             child: Text(
               value,
-              style: TextStyle(fontWeight: isBold ? FontWeight.bold : FontWeight.normal),
+              style: TextStyle(
+                fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+                color: color ?? Colors.black,
+                fontSize: isBold ? 16 : 14,
+              ),
               textAlign: TextAlign.right,
             ),
           ),
@@ -194,7 +218,7 @@ class _DeliveryConfirmationScreenState extends State<DeliveryConfirmationScreen>
               child: OutlinedButton.icon(
                 onPressed: () => _pickImage(ImageSource.gallery),
                 icon: const Icon(Icons.photo_library),
-                label: const Text('Chọn từ thư viện'),
+                label: const Text('Thư viện'),
               ),
             ),
           ],

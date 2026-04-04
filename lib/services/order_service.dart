@@ -12,7 +12,7 @@ class OrderService extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
   static const String _ordersCollection = 'Orders';
 
-  // Tạo đơn hàng (Dùng cho booking_screen)
+  // Tạo đơn hàng
   Future<OrderData> createOrder({
     required String customerId,
     required String storeId,
@@ -82,12 +82,12 @@ class OrderService extends ChangeNotifier {
     });
   }
 
-  // Cập nhật trạng thái (Sửa lỗi không lưu bằng cách ghi cả snake_case và camelCase)
+  // Cập nhật trạng thái
   Future<void> updateOrderStatus(String orderId, String newStatus, {String? proofImage}) async {
     final now = FieldValue.serverTimestamp();
     final data = {
       'status': newStatus,
-      'order_status': newStatus, // snake_case cho tương thích
+      'order_status': newStatus,
       'updatedAt': now,
       'updated_at': now,
     };
@@ -112,18 +112,27 @@ class OrderService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Upload ảnh lên Supabase
+  // Upload ảnh lên Supabase vào folder proofimages trong bucket food-images
   Future<String?> uploadProofImage(String orderId, Uint8List bytes) async {
     try {
-      final path = 'order_proofs/proof_$orderId.jpg';
-      await _supabase.storage.from('food_images').uploadBinary(path, bytes, fileOptions: const FileOptions(upsert: true));
-      return _supabase.storage.from('food_images').getPublicUrl(path);
+      // Sửa tên Bucket từ 'food_images' thành 'food-images' để khớp với thực tế của bạn
+      const bucketName = 'food-images'; 
+      final path = 'proofimages/proof_$orderId.jpg';
+      
+      await _supabase.storage.from(bucketName).uploadBinary(
+        path, 
+        bytes, 
+        fileOptions: const FileOptions(upsert: true, contentType: 'image/jpeg')
+      );
+      
+      return _supabase.storage.from(bucketName).getPublicUrl(path);
     } catch (e) {
+      debugPrint('Lỗi upload ảnh minh chứng: $e');
       return null;
     }
   }
 
-  // Nhận đơn hàng (Sửa lỗi không lưu)
+  // Nhận đơn hàng
   Future<void> acceptOrder(String orderId, String driverId) async {
     final now = FieldValue.serverTimestamp();
     await _firestore.collection(_ordersCollection).doc(orderId).update({

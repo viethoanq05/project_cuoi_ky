@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/order.dart';
 import '../services/user_service.dart';
 import '../controller/driver_controller.dart';
+import '../theme/app_colors.dart';
 import 'order_detail_sheet.dart';
 
 class OrderCard extends StatefulWidget {
@@ -42,70 +43,93 @@ class _OrderCardState extends State<OrderCard> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final itemNames = widget.order.items.map((item) => item['name'] ?? 'Sản phẩm').join(', ');
+    final double totalEarnings = widget.order.totalAmount + widget.order.deliveryFee;
 
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: InkWell(
-        onTap: widget.onTap ?? () {
-          // Lấy controller hiện tại từ context
-          final driverController = Provider.of<DriverController>(context, listen: false);
-          
-          showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            builder: (context) => ChangeNotifierProvider.value(
-              value: driverController,
-              child: OrderDetailSheet(order: widget.order),
-            ),
-          );
-        },
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      _displayStoreName,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Colors.blueAccent),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Text(
-                    currencyFormat.format(widget.order.totalAmount),
-                    style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
-                ],
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.textPrimary.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: widget.onTap ?? () {
+            final driverController = Provider.of<DriverController>(context, listen: false);
+            showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (context) => ChangeNotifierProvider.value(
+                value: driverController,
+                child: OrderDetailSheet(order: widget.order),
               ),
-              const SizedBox(height: 12),
-              _buildIconRow(Icons.storefront, 'Từ: $_storeAddress', Colors.orange),
-              const SizedBox(height: 6),
-              _buildIconRow(Icons.location_on_outlined, 'Giao đến: ${widget.order.deliveryAddress}', Colors.redAccent),
-              const SizedBox(height: 6),
-              _buildIconRow(Icons.fastfood_outlined, 'Món: ${itemNames.isEmpty ? "Đang cập nhật" : itemNames}', Colors.grey[600]!),
-              
-              if (widget.bottomAction != null) ...[
-                const Divider(height: 32),
-                widget.bottomAction!,
-              ] else ...[
-                const Divider(height: 32),
-                const Center(
-                  child: Text(
-                    'Xem chi tiết', 
-                    style: TextStyle(color: Colors.blue, fontSize: 12, fontWeight: FontWeight.w500)
-                  )
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _displayStoreName,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: AppColors.primary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          currencyFormat.format(totalEarnings),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: AppColors.success,
+                          ),
+                        ),
+                        if (widget.order.deliveryFee > 0)
+                          Text(
+                            '(Gồm ${currencyFormat.format(widget.order.deliveryFee)} ship)',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: AppColors.textMuted,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 12),
+                _buildIconRow(Icons.store_rounded, 'Từ: $_storeAddress', AppColors.accent),
+                const SizedBox(height: 8),
+                _buildIconRow(Icons.location_on_rounded, 'Giao đến: ${widget.order.deliveryAddress}', AppColors.danger),
+                const SizedBox(height: 8),
+                _buildIconRow(Icons.inventory_2_rounded, 'Món: ${itemNames.isEmpty ? "Đang cập nhật" : itemNames}', AppColors.textSecondary),
+                
+                if (widget.bottomAction != null) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Divider(height: 1, color: AppColors.divider),
+                  ),
+                  widget.bottomAction!,
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -113,15 +137,19 @@ class _OrderCardState extends State<OrderCard> {
   }
 
   Widget _buildIconRow(IconData icon, String text, Color iconColor) {
+    final theme = Theme.of(context);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 16, color: iconColor),
-        const SizedBox(width: 10),
+        Icon(icon, size: 18, color: iconColor),
+        const SizedBox(width: 12),
         Expanded(
           child: Text(
             text,
-            style: TextStyle(fontSize: 13, color: Colors.grey[800], height: 1.4),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: AppColors.textSecondary,
+              height: 1.4,
+            ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
