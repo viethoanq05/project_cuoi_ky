@@ -34,8 +34,9 @@ class OrderRepository implements OrderRepositoryInterface {
       if (paymentMethod == 'wallet') {
         await _datasource.processWalletPayment(
           userId: userId,
+          storeId: storeId,
           orderId: orderId,
-          items: itemsData..insert(0, {'store_id': storeId}),
+          items: itemsData,
           totalPrice: totalPrice,
           deliveryAddress: deliveryAddress,
         );

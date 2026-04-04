@@ -47,12 +47,14 @@ class FirestoreDatasource {
       final snapshot = await _firebaseFirestore
           .collection('orders')
           .where('user_id', isEqualTo: userId)
-          .orderBy('created_at', descending: true)
           .get();
 
-      return snapshot.docs
+      final orders = snapshot.docs
           .map((doc) => OrderModel.fromJson(doc.data()))
           .toList();
+
+      orders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return orders;
     } catch (e) {
       rethrow;
     }
@@ -100,7 +102,7 @@ class FirestoreDatasource {
   Future<UserProfileModel> getUserProfile(String userId) async {
     try {
       final doc =
-          await _firebaseFirestore.collection('users').doc(userId).get();
+          await _firebaseFirestore.collection('Users').doc(userId).get();
       if (doc.exists && doc.data() != null) {
         return UserProfileModel.fromJson(doc.data()!);
       }
@@ -112,7 +114,7 @@ class FirestoreDatasource {
 
   Stream<UserProfileModel?> watchUserProfile(String userId) {
     return _firebaseFirestore
-        .collection('users')
+        .collection('Users')
         .doc(userId)
         .snapshots()
         .map((snapshot) {
@@ -132,12 +134,14 @@ class FirestoreDatasource {
     required double longitude,
   }) async {
     try {
-      await _firebaseFirestore.collection('users').doc(userId).update({
+      await _firebaseFirestore.collection('Users').doc(userId).update({
+        'fullName': name,
         'name': name,
         'phone': phone,
         'address': address,
         'lat': latitude,
         'lng': longitude,
+        'updated_at': DateTime.now().toIso8601String(),
       });
     } catch (e) {
       rethrow;
@@ -147,7 +151,7 @@ class FirestoreDatasource {
   Future<bool> validateWalletBalance(String userId, double amount) async {
     try {
       final doc =
-          await _firebaseFirestore.collection('users').doc(userId).get();
+          await _firebaseFirestore.collection('Users').doc(userId).get();
       if (doc.exists && doc.data() != null) {
         final walletBalance =
             (doc.data()!['wallet_balance'] as num?)?.toDouble() ?? 0.0;
@@ -162,7 +166,7 @@ class FirestoreDatasource {
   Future<void> deductWalletBalance(String userId, double amount) async {
     try {
       await _firebaseFirestore
-          .collection('users')
+          .collection('Users')
           .doc(userId)
           .update({
             'wallet_balance': FieldValue.increment(-amount),
@@ -175,7 +179,7 @@ class FirestoreDatasource {
   Future<void> addWalletBalance(String userId, double amount) async {
     try {
       await _firebaseFirestore
-          .collection('users')
+          .collection('Users')
           .doc(userId)
           .update({
             'wallet_balance': FieldValue.increment(amount),
@@ -249,12 +253,13 @@ class FirestoreDatasource {
       final snapshot = await _firebaseFirestore
           .collection('reviews')
           .where('store_id', isEqualTo: storeId)
-          .orderBy('created_at', descending: true)
           .get();
 
-      return snapshot.docs
+      final reviews = snapshot.docs
           .map((doc) => ReviewModel.fromJson(doc.data()))
           .toList();
+      reviews.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return reviews;
     } catch (e) {
       rethrow;
     }
@@ -264,6 +269,7 @@ class FirestoreDatasource {
 
   Future<void> processWalletPayment({
     required String userId,
+    required String storeId,
     required String orderId,
     required List<Map<String, dynamic>> items,
     required double totalPrice,
@@ -271,7 +277,7 @@ class FirestoreDatasource {
   }) async {
     try {
       await _firebaseFirestore.runTransaction((transaction) async {
-        final userRef = _firebaseFirestore.collection('users').doc(userId);
+        final userRef = _firebaseFirestore.collection('Users').doc(userId);
         final userDoc = await transaction.get(userRef);
 
         if (!userDoc.exists) {
@@ -288,6 +294,7 @@ class FirestoreDatasource {
         // Deduct wallet
         transaction.update(userRef, {
           'wallet_balance': FieldValue.increment(-totalPrice),
+          'updated_at': DateTime.now().toIso8601String(),
         });
 
         // Create order
@@ -295,7 +302,7 @@ class FirestoreDatasource {
         transaction.set(orderRef, {
           'id': orderId,
           'user_id': userId,
-          'store_id': items.isNotEmpty ? items.first['store_id'] : '',
+          'store_id': storeId,
           'items': items,
           'total_price': totalPrice,
           'status': 'pending',

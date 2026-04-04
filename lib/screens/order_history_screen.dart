@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../domain/entities/order_entity.dart';
 import '../providers/order_history_provider.dart';
 import 'order_tracking_screen.dart';
+import 'review_order_screen.dart';
 
 class OrderHistoryScreen extends StatefulWidget {
   final String userId;
@@ -198,34 +199,66 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                 ],
               ),
               const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                height: 36,
-                child: TextButton(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => OrderTrackingScreen(
-                          orderId: order.id,
-                          userId: widget.userId,
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 36,
+                      child: TextButton(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => OrderTrackingScreen(
+                                orderId: order.id,
+                                userId: widget.userId,
+                              ),
+                            ),
+                          );
+                        },
+                        style: TextButton.styleFrom(
+                          backgroundColor: Colors.grey.shade100,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                        ),
+                        child: const Text(
+                          'View Details',
+                          style: TextStyle(
+                            color: Colors.black87,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
-                    );
-                  },
-                  style: TextButton.styleFrom(
-                    backgroundColor: Colors.grey.shade100,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6),
                     ),
                   ),
-                  child: const Text(
-                    'View Details',
-                    style: TextStyle(
-                      color: Colors.black87,
-                      fontWeight: FontWeight.w500,
+                  if (order.status == 'delivered' || order.status == 'completed') ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: SizedBox(
+                        height: 36,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => ReviewOrderScreen(
+                                  orderId: order.id,
+                                  storeId: order.storeId,
+                                  userId: widget.userId,
+                                ),
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                          child: const Text('Review'),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
+                  ],
+                ],
               ),
             ],
           ),
@@ -249,6 +282,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
       case 'delivering':
         return 'Delivering';
       case 'completed':
+      case 'delivered':
         return 'Completed';
       case 'cancelled':
         return 'Cancelled';
@@ -267,6 +301,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
       case 'delivering':
         return Colors.purple;
       case 'completed':
+      case 'delivered':
         return Colors.green;
       case 'cancelled':
         return Colors.red;

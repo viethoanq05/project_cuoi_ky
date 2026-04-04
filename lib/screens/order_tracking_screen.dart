@@ -127,7 +127,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   }
 
   Widget _buildOrderTimeline(OrderTrackingProvider provider) {
-    final statuses = ['pending', 'confirmed', 'preparing', 'delivering', 'completed'];
+    final statuses = ['pending', 'confirmed', 'preparing', 'delivering', 'completed', 'delivered'];
     final currentStatus = provider.order!.status;
     final currentIndex = statuses.indexOf(currentStatus);
 
@@ -350,7 +350,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   }
 
   Widget _buildActionButtons(BuildContext context, OrderTrackingProvider provider, dynamic order) {
-    final canReview = order.status == 'completed';
+    final canReview = order.status == 'completed' || order.status == 'delivered';
     final canCancel = provider.canCancel;
 
     return Column(
@@ -442,6 +442,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       case 'delivering':
         return 'Delivering';
       case 'completed':
+      case 'delivered':
         return 'Completed';
       default:
         return status;

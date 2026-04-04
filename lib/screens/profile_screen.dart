@@ -21,6 +21,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late TextEditingController _phoneController;
   late TextEditingController _addressController;
   bool _isEditing = false;
+  bool _hasLoadedProfile = false;
   double? _currentLatitude;
   double? _currentLongitude;
 
@@ -100,6 +101,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             return const Center(
               child: Text('User profile not found'),
             );
+          }
+
+          if (!_hasLoadedProfile && provider.userProfile != null) {
+            _updateControllers(provider.userProfile!);
+            _hasLoadedProfile = true;
           }
 
           return SingleChildScrollView(
@@ -382,14 +388,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
       BuildContext context, UserProfileProvider provider) async {
     try {
       final permission = await Geolocator.checkPermission();
-      PermissionStatus permissionStatus = permission;
+      LocationPermission permissionStatus = permission;
 
-      if (permission == PermissionStatus.denied) {
+      if (permission == LocationPermission.denied) {
         permissionStatus = await Geolocator.requestPermission();
       }
 
-      if (permissionStatus == PermissionStatus.denied ||
-          permissionStatus == PermissionStatus.deniedForever) {
+      if (permissionStatus == LocationPermission.denied ||
+          permissionStatus == LocationPermission.deniedForever) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(

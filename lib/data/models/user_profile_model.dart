@@ -22,7 +22,9 @@ class UserProfileModel {
   factory UserProfileModel.fromJson(Map<String, dynamic> json) {
     return UserProfileModel(
       id: json['id'] as String? ?? '',
-      name: json['name'] as String? ?? '',
+      name: (json['fullName'] as String?)?.trim().isNotEmpty == true
+          ? json['fullName'] as String
+          : (json['name'] as String? ?? ''),
       phone: json['phone'] as String? ?? '',
       address: json['address'] as String? ?? '',
       walletBalance: (json['wallet_balance'] as num?)?.toDouble() ?? 0.0,
@@ -34,6 +36,7 @@ class UserProfileModel {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'fullName': name,
       'name': name,
       'phone': phone,
       'address': address,

@@ -21,10 +21,11 @@ class MenuService {
   static String getPublicImageUrl(String path) {
     if (path.isEmpty) return '';
     if (path.startsWith('http')) return path; // Already a full URL (e.g., from public storage or other source)
-    
+
     try {
       if (Supabase.instance.isInitialized) {
-        return Supabase.instance.client.storage.from(_storageBucket).getPublicUrl(path);
+        final storageBucket = SupabaseConfig.instance.storageBucket;
+        return Supabase.instance.client.storage.from(storageBucket).getPublicUrl(path);
       }
     } catch (_) {
       // Supabase not initialized or other error
