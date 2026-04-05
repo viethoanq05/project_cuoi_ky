@@ -20,6 +20,7 @@ import '../widgets/food_grid_card.dart';
 import '../widgets/store_status_card.dart';
 import 'customer_home_screen.dart';
 import 'food_editor_screen.dart';
+import 'driver_role_screens/dashboard.dart';
 
 class RoleHomeScreen extends StatefulWidget {
   const RoleHomeScreen({super.key});
@@ -34,16 +35,16 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
   bool _checkingProfile = false;
   bool _savingProfile = false;
   bool _loadingLocation = false;
-  bool _updatingStoreStatus = false;
   bool _updatingDriverOnline = false;
+  bool _updatingStoreStatus = false;
   String? _storeStatusError;
   LatLng? _currentLatLng;
   String _currentAddress = 'Dang xac dinh vi tri...';
   String? _locationError;
 
-  final Set<String> _acceptingOrderIds = <String>{};
   final Map<String, LatLng> _orderGeoCache = <String, LatLng>{};
   final Set<String> _geocodingOrderIds = <String>{};
+  final Set<String> _acceptingOrderIds = <String>{};
 
   static const String _usersCollection = 'Users';
   static const String _ordersCollection = 'Orders';
@@ -1770,7 +1771,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
     }
 
     if (user.role == UserRole.driver) {
-      return _buildDriverHome(user);
+      return DriverDashboard(authService: _auth);
     }
 
     if (user.role == UserRole.customer) {

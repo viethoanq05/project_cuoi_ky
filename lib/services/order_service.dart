@@ -1,19 +1,20 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../models/order.dart';
 
 class OrderService extends ChangeNotifier {
   static final OrderService _instance = OrderService._internal();
-
-  factory OrderService() {
-    return _instance;
-  }
-
+  factory OrderService() => _instance;
   OrderService._internal();
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final SupabaseClient _supabase = Supabase.instance.client;
 
-  // Tạo đơn hàng
+  static const String _ordersCollection = 'Orders';
+  static const String _usersCollection = 'Users';
+
   Future<OrderData> createOrder({
     required String customerId,
     required String storeId,
@@ -28,108 +29,114 @@ class OrderService extends ChangeNotifier {
     double? deliveryLng,
     String? notes,
   }) async {
-    try {
-      final orderId = _firestore.collection('Orders').doc().id;
-      final now = DateTime.now();
+    final orderId = _firestore.collection(_ordersCollection).doc().id;
+    final now = DateTime.now();
 
-      final order = OrderData(
-        orderId: orderId,
-        customerId: customerId,
-        storeId: storeId,
-        storeName: storeName,
-        items: items,
-        totalAmount: totalAmount,
-        deliveryFee: deliveryFee,
-        paymentMethod: paymentMethod,
-        status: 'pending',
-        scheduledTime: scheduledTime,
-        createdAt: now,
-        updatedAt: now,
-        deliveryAddress: deliveryAddress,
-        deliveryLat: deliveryLat,
-        deliveryLng: deliveryLng,
-        notes: notes,
-      );
+    final order = OrderData(
+      orderId: orderId,
+      customerId: customerId,
+      storeId: storeId,
+      storeName: storeName,
+      items: items,
+      totalAmount: totalAmount,
+      deliveryFee: deliveryFee,
+      paymentMethod: paymentMethod,
+      status: 'pending',
+      scheduledTime: scheduledTime,
+      createdAt: now,
+      updatedAt: now,
+      deliveryAddress: deliveryAddress,
+      deliveryLat: deliveryLat,
+      deliveryLng: deliveryLng,
+      notes: notes,
+    );
 
-      if (paymentMethod == 'wallet') {
-        await _firestore.runTransaction((transaction) async {
-          final userRef = _firestore.collection('Users').doc(customerId);
-          final userSnapshot = await transaction.get(userRef);
+    final ordersRef = _firestore.collection(_ordersCollection).doc(orderId);
+    final userRef = _firestore.collection(_usersCollection).doc(customerId);
+    final storeRef = _firestore.collection(_usersCollection).doc(storeId);
 
-          if (!userSnapshot.exists) {
-            throw Exception('User không tồn tại');
-          }
+    if (paymentMethod == 'wallet') {
+      await _firestore.runTransaction((transaction) async {
+        final userSnapshot = await transaction.get(userRef);
+        if (!userSnapshot.exists) {
+          throw Exception('User không tồn tại');
+        }
 
-          final walletBalance =
-              (userSnapshot.data()?['wallet_balance'] as num?)?.toDouble() ??
-              0.0;
+        final walletBalance =
+            (userSnapshot.data()?['wallet_balance'] as num?)?.toDouble() ?? 0.0;
+        if (walletBalance < totalAmount) {
+          throw Exception('Số dư ví không đủ');
+        }
 
-          if (walletBalance < totalAmount) {
-            throw Exception('Số dư ví không đủ');
-          }
-
-          transaction.update(userRef, {
-            'wallet_balance': FieldValue.increment(-totalAmount),
-            'updatedAt': now,
-          });
-
-          final ordersRef = _firestore.collection('Orders').doc(orderId);
-          transaction.set(ordersRef, order.toMap());
-
-          final customerOrderRef = userRef.collection('Orders').doc(orderId);
-          transaction.set(customerOrderRef, order.toMap());
-
-          final storeOrderRef = _firestore
-              .collection('Users')
-              .doc(storeId)
-              .collection('Orders')
-              .doc(orderId);
-          transaction.set(storeOrderRef, order.toMap());
+        transaction.update(userRef, {
+          'wallet_balance': FieldValue.increment(-totalAmount),
+          'updatedAt': now,
+          'updated_at': now,
         });
-      } else {
-        await _firestore.collection('Orders').doc(orderId).set(order.toMap());
 
-        // Thêm vào collection của khách hàng
-        await _firestore
-            .collection('Users')
-            .doc(customerId)
-            .collection('Orders')
-            .doc(orderId)
-            .set(order.toMap());
-
-        // Thêm vào collection của cửa hàng
-        await _firestore
-            .collection('Users')
-            .doc(storeId)
-            .collection('Orders')
-            .doc(orderId)
-            .set(order.toMap());
-      }
-
-      notifyListeners();
-      return order;
-    } catch (e) {
-      rethrow;
+        transaction.set(ordersRef, order.toMap());
+        transaction.set(
+          userRef.collection(_ordersCollection).doc(orderId),
+          order.toMap(),
+        );
+        transaction.set(
+          storeRef.collection(_ordersCollection).doc(orderId),
+          order.toMap(),
+        );
+      });
+    } else {
+      await ordersRef.set(order.toMap());
+      await userRef
+          .collection(_ordersCollection)
+          .doc(orderId)
+          .set(order.toMap());
+      await storeRef
+          .collection(_ordersCollection)
+          .doc(orderId)
+          .set(order.toMap());
     }
+
+    notifyListeners();
+    return order;
   }
 
-  // Lấy danh sách đơn hàng của khách hàng
   Stream<List<OrderData>> watchCustomerOrders(String customerId) {
     return _firestore
-        .collection('Users')
+        .collection(_usersCollection)
         .doc(customerId)
-        .collection('Orders')
+        .collection(_ordersCollection)
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
           return snapshot.docs
-              .map((doc) => OrderData.fromMap(doc.data()))
+              .map(
+                (doc) => OrderData.fromMap({...doc.data(), 'orderId': doc.id}),
+              )
+              .toList();
+        });
+  }
+
+  Stream<List<OrderData>> watchStoreOrders(String storeId) {
+    return _firestore
+        .collection(_usersCollection)
+        .doc(storeId)
+        .collection(_ordersCollection)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs
+              .map(
+                (doc) => OrderData.fromMap({...doc.data(), 'orderId': doc.id}),
+              )
               .toList();
         });
   }
 
   Future<bool> validateWalletBalance(String customerId, double amount) async {
-    final doc = await _firestore.collection('Users').doc(customerId).get();
+    final doc = await _firestore
+        .collection(_usersCollection)
+        .doc(customerId)
+        .get();
     if (!doc.exists) {
       throw Exception('User không tồn tại');
     }
@@ -139,125 +146,178 @@ class OrderService extends ChangeNotifier {
     return walletBalance >= amount;
   }
 
-  // Lấy danh sách đơn hàng của cửa hàng
-  Stream<List<OrderData>> watchStoreOrders(String storeId) {
+  Stream<List<OrderData>> watchDriverActiveOrders(String driverId) {
     return _firestore
-        .collection('Users')
-        .doc(storeId)
-        .collection('Orders')
-        .orderBy('createdAt', descending: true)
+        .collection(_ordersCollection)
+        .where('driverId', isEqualTo: driverId)
+        .where('status', whereIn: ['preparing', 'on_the_way', 'ready'])
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs
-              .map((doc) => OrderData.fromMap(doc.data()))
+          final orders = snapshot.docs
+              .map(
+                (doc) => OrderData.fromMap({...doc.data(), 'orderId': doc.id}),
+              )
               .toList();
+          orders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return orders;
         });
   }
 
-  // Cập nhật trạng thái đơn hàng
+  Stream<List<OrderData>> watchDriverHistory(String driverId) {
+    return _firestore
+        .collection(_ordersCollection)
+        .where('driverId', isEqualTo: driverId)
+        .where('status', isEqualTo: 'delivered')
+        .snapshots()
+        .map((snapshot) {
+          final orders = snapshot.docs
+              .map(
+                (doc) => OrderData.fromMap({...doc.data(), 'orderId': doc.id}),
+              )
+              .toList();
+          orders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return orders;
+        });
+  }
+
   Future<void> updateOrderStatus(
     String orderId,
     String newStatus, {
     String? driverId,
+    String? proofImage,
   }) async {
-    try {
-      final now = DateTime.now();
-      final updateData = <String, dynamic>{
-        'status': newStatus,
-        'updatedAt': now,
-        'driverId': driverId,
-      }..removeWhere((key, value) => value == null);
+    final now = FieldValue.serverTimestamp();
 
-      // Cập nhật collection orders chính
-      await _firestore.collection('Orders').doc(orderId).update(updateData);
+    final data = <String, dynamic>{
+      'status': newStatus,
+      'order_status': newStatus,
+      'updatedAt': now,
+      'updated_at': now,
+    };
 
-      // Lấy order để cập nhật ở user collections
-      final orderDoc = await _firestore.collection('Orders').doc(orderId).get();
-      if (orderDoc.exists) {
-        final orderData = orderDoc.data();
-        if (orderData == null) {
-          return;
-        }
-        final order = OrderData.fromMap(orderData);
-
-        // Cập nhật ở khách hàng
-        await _firestore
-            .collection('Users')
-            .doc(order.customerId)
-            .collection('Orders')
-            .doc(orderId)
-            .update(updateData);
-
-        // Cập nhật ở cửa hàng
-        await _firestore
-            .collection('Users')
-            .doc(order.storeId)
-            .collection('Orders')
-            .doc(orderId)
-            .update(updateData);
-      }
-
-      notifyListeners();
-    } catch (e) {
-      rethrow;
+    if (driverId != null) {
+      data['driverId'] = driverId;
+      data['driver_id'] = driverId;
     }
+
+    if (proofImage != null) {
+      data['proofImage'] = proofImage;
+      data['proof_image'] = proofImage;
+    }
+
+    await _updateOrderAndMirrors(orderId, data);
+    notifyListeners();
   }
 
-  // Thêm đánh giá
-  Future<void> addReview(String orderId, double rating, String review) async {
-    try {
-      await _firestore.collection('Orders').doc(orderId).update({
-        'rating': rating,
-        'review': review,
-        'updatedAt': DateTime.now(),
-      });
-
-      final orderDoc = await _firestore.collection('Orders').doc(orderId).get();
-      if (orderDoc.exists) {
-        final order = OrderData.fromMap(
-          orderDoc.data() as Map<String, dynamic>,
-        );
-
-        await _firestore
-            .collection('Users')
-            .doc(order.customerId)
-            .collection('Orders')
-            .doc(orderId)
-            .update({'rating': rating, 'review': review});
-
-        await _firestore
-            .collection('Users')
-            .doc(order.storeId)
-            .collection('Orders')
-            .doc(orderId)
-            .update({'rating': rating, 'review': review});
-      }
-
-      notifyListeners();
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  // Hủy đơn hàng
   Future<void> cancelOrder(String orderId) async {
+    await updateOrderStatus(orderId, 'cancelled');
+  }
+
+  Future<void> addReview(String orderId, double rating, String review) async {
+    final data = {
+      'rating': rating,
+      'review': review,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updated_at': FieldValue.serverTimestamp(),
+    };
+
+    await _updateOrderAndMirrors(orderId, data);
+    notifyListeners();
+  }
+
+  Future<OrderData?> getOrderDetail(String orderId) async {
+    final doc = await _firestore
+        .collection(_ordersCollection)
+        .doc(orderId)
+        .get();
+    if (!doc.exists) {
+      return null;
+    }
+    final data = doc.data();
+    if (data == null) {
+      return null;
+    }
+
+    return OrderData.fromMap({...data, 'orderId': doc.id});
+  }
+
+  Future<void> acceptOrder(String orderId, String driverId) async {
+    await updateOrderStatus(orderId, 'preparing', driverId: driverId);
+  }
+
+  Future<void> driverCancelOrder(String orderId) async {
+    final data = {
+      'status': 'pending',
+      'order_status': 'pending',
+      'driverId': '',
+      'driver_id': '',
+      'driver_name': '',
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updated_at': FieldValue.serverTimestamp(),
+    };
+
+    await _updateOrderAndMirrors(orderId, data);
+    notifyListeners();
+  }
+
+  Future<String?> uploadProofImage(String orderId, Uint8List bytes) async {
     try {
-      await updateOrderStatus(orderId, 'cancelled');
+      const bucketName = 'food-images';
+      final path = 'proofimages/proof_$orderId.jpg';
+
+      await _supabase.storage
+          .from(bucketName)
+          .uploadBinary(
+            path,
+            bytes,
+            fileOptions: const FileOptions(
+              upsert: true,
+              contentType: 'image/jpeg',
+            ),
+          );
+
+      return _supabase.storage.from(bucketName).getPublicUrl(path);
     } catch (e) {
-      rethrow;
+      debugPrint('Lỗi upload ảnh minh chứng: $e');
+      return null;
     }
   }
 
-  // Lấy chi tiết đơn hàng
-  Future<OrderData?> getOrderDetail(String orderId) async {
-    try {
-      final doc = await _firestore.collection('Orders').doc(orderId).get();
-      if (doc.exists) {
-        return OrderData.fromMap(doc.data() as Map<String, dynamic>);
-      }
-      return null;
-    } catch (e) {
-      rethrow;
+  Future<void> _updateOrderAndMirrors(
+    String orderId,
+    Map<String, dynamic> updateData,
+  ) async {
+    final orderRef = _firestore.collection(_ordersCollection).doc(orderId);
+
+    // Update main order doc.
+    await orderRef.update(updateData);
+
+    // Best-effort mirror into user subcollections.
+    final orderDoc = await orderRef.get();
+    final orderData = orderDoc.data();
+    if (orderData == null) {
+      return;
     }
+
+    final order = OrderData.fromMap({...orderData, 'orderId': orderId});
+
+    final customerOrderRef = _firestore
+        .collection(_usersCollection)
+        .doc(order.customerId)
+        .collection(_ordersCollection)
+        .doc(orderId);
+    final storeOrderRef = _firestore
+        .collection(_usersCollection)
+        .doc(order.storeId)
+        .collection(_ordersCollection)
+        .doc(orderId);
+
+    try {
+      await customerOrderRef.update(updateData);
+    } catch (_) {}
+
+    try {
+      await storeOrderRef.update(updateData);
+    } catch (_) {}
   }
 }

@@ -9,7 +9,8 @@ class OrderData {
   final double totalAmount;
   final double deliveryFee;
   final String paymentMethod;
-  final String status; // pending, confirmed, preparing, ready, on_the_way, delivered, cancelled
+  final String
+  status; // pending, confirmed, preparing, ready, on_the_way, delivered, cancelled
   final DateTime? scheduledTime; // Nếu là đặt lịch
   final DateTime createdAt;
   final DateTime? updatedAt;
@@ -20,6 +21,7 @@ class OrderData {
   final String? notes;
   final double? rating;
   final String? review;
+  final String? proofImage;
 
   OrderData({
     required this.orderId,
@@ -41,58 +43,123 @@ class OrderData {
     this.notes,
     this.rating,
     this.review,
+    this.proofImage,
   });
 
   Map<String, dynamic> toMap() {
     return {
       'orderId': orderId,
+      'order_id': orderId,
       'customerId': customerId,
+      'customer_id': customerId,
+      'user_id': customerId,
       'storeId': storeId,
+      'store_id': storeId,
       'storeName': storeName,
+      'store_name': storeName,
       'items': items,
+      'order_items': items,
       'totalAmount': totalAmount,
+      'total_amount': totalAmount,
       'deliveryFee': deliveryFee,
+      'shipping_fee': deliveryFee,
       'paymentMethod': paymentMethod,
+      'payment_method': paymentMethod,
       'status': status,
+      'order_status': status,
       'scheduledTime': scheduledTime,
+      'scheduled_time': scheduledTime,
       'createdAt': createdAt,
+      'created_at': createdAt,
+      'order_time': createdAt,
       'updatedAt': updatedAt,
+      'updated_at': updatedAt,
       'deliveryAddress': deliveryAddress,
+      'delivery_address': deliveryAddress,
       'deliveryLat': deliveryLat,
+      'delivery_lat': deliveryLat,
       'deliveryLng': deliveryLng,
+      'delivery_lng': deliveryLng,
       'driverId': driverId,
+      'driver_id': driverId,
       'notes': notes,
       'rating': rating,
       'review': review,
+      'proofImage': proofImage,
+      'proof_image': proofImage,
     };
   }
 
   factory OrderData.fromMap(Map<String, dynamic> map) {
-    return OrderData(
-      orderId: map['orderId'] as String,
-      customerId: map['customerId'] as String,
-      storeId: map['storeId'] as String,
-      storeName: map['storeName'] as String,
-      items: List<Map<String, dynamic>>.from(map['items'] as List),
-      totalAmount: (map['totalAmount'] as num).toDouble(),
-      deliveryFee: (map['deliveryFee'] as num).toDouble(),
-      paymentMethod: map['paymentMethod'] as String? ?? 'cod',
-      status: map['status'] as String,
-      createdAt: (map['createdAt'] as Timestamp).toDate(),
-      scheduledTime: map['scheduledTime'] != null 
-          ? (map['scheduledTime'] as Timestamp).toDate() 
-          : null,
-      updatedAt: map['updatedAt'] != null 
-          ? (map['updatedAt'] as Timestamp).toDate() 
-          : null,
-      deliveryAddress: map['deliveryAddress'] as String?,
-      deliveryLat: (map['deliveryLat'] as num?)?.toDouble(),
-      deliveryLng: (map['deliveryLng'] as num?)?.toDouble(),
-      driverId: map['driverId'] as String?,
-      notes: map['notes'] as String?,
-      rating: (map['rating'] as num?)?.toDouble(),
-      review: map['review'] as String?,
+    double? lat = _asDouble(
+      map['deliveryLat'] ??
+          map['delivery_lat'] ??
+          map['lat'] ??
+          map['latitude'],
     );
+    double? lng = _asDouble(
+      map['deliveryLng'] ??
+          map['delivery_lng'] ??
+          map['lng'] ??
+          map['longitude'],
+    );
+
+    if (lat == null || lng == null) {
+      lat = 21.028511;
+      lng = 105.804817;
+    }
+
+    return OrderData(
+      orderId: (map['orderId'] ?? map['order_id'] ?? '').toString(),
+      customerId:
+          (map['customerId'] ?? map['customer_id'] ?? map['user_id'] ?? '')
+              .toString(),
+      storeId: (map['storeId'] ?? map['store_id'] ?? '').toString(),
+      storeName: (map['storeName'] ?? map['store_name'] ?? 'Cửa hàng')
+          .toString(),
+      items: map['items'] is List
+          ? List<Map<String, dynamic>>.from(map['items'])
+          : (map['order_items'] is List
+                ? List<Map<String, dynamic>>.from(map['order_items'])
+                : const <Map<String, dynamic>>[]),
+      totalAmount:
+          _asDouble(map['totalAmount'] ?? map['total_amount'] ?? 0) ?? 0,
+      deliveryFee:
+          _asDouble(map['deliveryFee'] ?? map['shipping_fee'] ?? 0) ?? 0,
+      paymentMethod: (map['paymentMethod'] ?? map['payment_method'] ?? 'cod')
+          .toString(),
+      status: (map['status'] ?? map['order_status'] ?? 'pending').toString(),
+      createdAt: _asDateTime(
+        map['createdAt'] ?? map['order_time'] ?? map['created_at'],
+      ),
+      scheduledTime: _asDateTime(map['scheduledTime'] ?? map['scheduled_time']),
+      updatedAt: _asDateTime(map['updatedAt'] ?? map['updated_at']),
+      deliveryAddress:
+          (map['deliveryAddress'] ??
+                  map['delivery_address'] ??
+                  'Không rõ địa chỉ')
+              .toString(),
+      deliveryLat: lat,
+      deliveryLng: lng,
+      driverId: (map['driverId'] ?? map['driver_id'] ?? map['driveId'] ?? '')
+          .toString(),
+      notes: map['notes']?.toString(),
+      rating: _asDouble(map['rating']),
+      review: map['review']?.toString(),
+      proofImage: (map['proofImage'] ?? map['proof_image'])?.toString(),
+    );
+  }
+
+  static double? _asDouble(dynamic val) {
+    if (val is num) return val.toDouble();
+    if (val is String) return double.tryParse(val);
+    return null;
+  }
+
+  static DateTime _asDateTime(dynamic val) {
+    if (val is Timestamp) return val.toDate();
+    if (val is String) return DateTime.tryParse(val) ?? DateTime.now();
+    return DateTime.now();
   }
 
   OrderData copyWith({
@@ -103,6 +170,7 @@ class OrderData {
     double? rating,
     String? review,
     String? paymentMethod,
+    String? proofImage,
   }) {
     return OrderData(
       orderId: orderId,
@@ -114,8 +182,8 @@ class OrderData {
       deliveryFee: deliveryFee,
       paymentMethod: paymentMethod ?? this.paymentMethod,
       status: status ?? this.status,
-      scheduledTime: scheduledTime,
       createdAt: createdAt,
+      scheduledTime: scheduledTime,
       updatedAt: updatedAt ?? this.updatedAt,
       deliveryAddress: deliveryAddress,
       deliveryLat: deliveryLat,
@@ -124,11 +192,7 @@ class OrderData {
       notes: notes ?? this.notes,
       rating: rating ?? this.rating,
       review: review ?? this.review,
+      proofImage: proofImage ?? this.proofImage,
     );
   }
-
-  bool get isScheduled => scheduledTime != null;
-  bool get isPending => status == 'pending';
-  bool get isCompleted => status == 'delivered';
-  bool get isCancelled => status == 'cancelled';
 }

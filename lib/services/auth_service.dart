@@ -14,6 +14,7 @@ class AuthService extends ChangeNotifier {
 
   static const String _usersCollection = 'Users';
   static const String _userNamesCollection = 'Usernames';
+  static const String _transactionsCollection = 'WalletTransactions';
 
   static const Map<String, dynamic> _defaultDriverInfo = <String, dynamic>{
     'biensoxe': '',
@@ -129,7 +130,8 @@ class AuthService extends ChangeNotifier {
         'phone': '',
         'address': '',
         'position': '',
-        'wallet_balance': 0,
+        'wallet_balance': 0.0,
+        'bank_account': '',
         'profile_completed': false,
         ..._roleSpecificPayload(role),
       };
@@ -154,6 +156,69 @@ class AuthService extends ChangeNotifier {
         _isRegistering = false;
         notifyListeners();
       }
+    }
+  }
+
+  Future<String?> updateWalletBalance(double newBalance, {Map<String, dynamic>? transaction}) async {
+    final user = _auth.currentUser;
+    if (user == null) return 'Chưa đăng nhập';
+    
+    try {
+      final batch = _firestore.batch();
+      
+      // 1. Cập nhật số dư User
+      final userRef = _firestore.collection(_usersCollection).doc(user.uid);
+      batch.update(userRef, {
+        'wallet_balance': newBalance,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      // 2. Nếu có transaction, lưu vào collection WalletTransactions
+      if (transaction != null) {
+        final transRef = _firestore.collection(_transactionsCollection).doc();
+        batch.set(transRef, {
+          ...transaction,
+          'driverId': user.uid,
+          'timestamp': FieldValue.serverTimestamp(),
+          'type': 'receive_order_payment'
+        });
+      }
+
+      await batch.commit();
+      _updateCurrentUserLocal(walletBalance: newBalance);
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  Future<String?> updateBankInfo({
+    required String bankAccount,
+  }) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      return 'Ban chua dang nhap.';
+    }
+
+    try {
+      final payload = <String, dynamic>{
+        'bank_account': bankAccount,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      await _firestore
+          .collection(_usersCollection)
+          .doc(user.uid)
+          .update(payload);
+      
+      _updateCurrentUserLocal(
+        bankAccount: bankAccount,
+      );
+      return null;
+    } on FirebaseException catch (e) {
+      return e.message ?? 'Khong the cap nhat thong tin ngan hang.';
+    } catch (e) {
+      return 'Khong the cap nhat thong tin ngan hang: $e';
     }
   }
 
@@ -375,6 +440,8 @@ class AuthService extends ChangeNotifier {
                       'longitude': data?['longitude'],
                     });
     final profileCompleted = _asBool(data?['profile_completed']);
+    final walletBalance = _asDouble(data?['wallet_balance']);
+    final bankAccount = _asTrimmedString(data?['bank_account']);
 
     bool isStoreOpen = false;
     final storeInfo = _normalizeStoreInfoList(data?['store_info']);
@@ -393,6 +460,8 @@ class AuthService extends ChangeNotifier {
       position: position,
       profileCompleted: profileCompleted,
       isStoreOpen: isStoreOpen,
+      walletBalance: walletBalance,
+      bankAccount: bankAccount,
     );
   }
 
@@ -488,6 +557,8 @@ class AuthService extends ChangeNotifier {
     Map<String, double>? position,
     bool? profileCompleted,
     bool? isStoreOpen,
+    double? walletBalance,
+    String? bankAccount,
   }) {
     final existing = _currentUser;
     if (existing == null) {
@@ -505,6 +576,8 @@ class AuthService extends ChangeNotifier {
       position: position ?? existing.position,
       profileCompleted: profileCompleted ?? existing.profileCompleted,
       isStoreOpen: isStoreOpen ?? existing.isStoreOpen,
+      walletBalance: walletBalance ?? existing.walletBalance,
+      bankAccount: bankAccount ?? existing.bankAccount,
     );
     notifyListeners();
   }
@@ -610,6 +683,16 @@ class AuthService extends ChangeNotifier {
       return normalized == 'true' || normalized == '1';
     }
     return false;
+  }
+
+  double _asDouble(dynamic value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    if (value is String) {
+      return double.tryParse(value) ?? 0.0;
+    }
+    return 0.0;
   }
 
   Map<String, double>? _asPositionMap(dynamic value) {
