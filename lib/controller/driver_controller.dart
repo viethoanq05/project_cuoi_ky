@@ -23,6 +23,7 @@ class DriverController extends ChangeNotifier {
   String _currentAddress = 'Đang xác định vị trí...';
   bool _isLoading = false;
   bool _updatingStatus = false;
+  int _selectedIndex = 0;
 
   StreamSubscription<Position>? _positionSubscription;
   StreamSubscription? _orderSubscription;
@@ -33,19 +34,26 @@ class DriverController extends ChangeNotifier {
   String get currentAddress => _currentAddress;
   bool get isLoading => _isLoading;
   bool get updatingStatus => _updatingStatus;
+  int get selectedIndex => _selectedIndex;
 
   void init() {
     _startLocationTracking();
     _listenToOrders();
   }
 
+  void setSelectedIndex(int index) {
+    _selectedIndex = index;
+    notifyListeners();
+  }
+
   void _listenToOrders() {
     _orderSubscription?.cancel();
-    _orderSubscription = _orderController.watchAvailableOrders().listen((
-      orders,
-    ) {
+    _orderSubscription = _orderController.watchAvailableOrders().listen((orders) {
+      print("CONTROLLER: Nhận được ${orders.length} đơn hàng. Cập nhật Dashboard...");
       _allOrders = orders;
       _filterOrders();
+    }, onError: (error) {
+      print("CONTROLLER ERROR: Lỗi lắng nghe đơn hàng: $error");
     });
   }
 
@@ -106,17 +114,45 @@ class DriverController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      Position position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 8),
-        ),
-      ).timeout(const Duration(seconds: 10));
+      Position? position;
+      
+      // 1. Thử lấy vị trí cuối cùng được biết (nhanh) - Không hỗ trợ trên Web
+      if (!kIsWeb) {
+        try {
+          position = await Geolocator.getLastKnownPosition();
+          if (position != null) {
+            _currentLocation = LatLng(position.latitude, position.longitude);
+            _fetchAddress(position.latitude, position.longitude);
+            _filterOrders();
+          }
+        } catch (e) {
+          debugPrint('Lỗi lấy LastKnownPosition: $e');
+        }
+      }
 
-      _currentLocation = LatLng(position.latitude, position.longitude);
-      await _fetchAddress(position.latitude, position.longitude);
+      // 2. Thử lấy vị trí hiện tại với độ chính xác vừa phải (nhanh hơn cao)
+      try {
+        position = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium, 
+            timeLimit: Duration(seconds: 5),
+          ),
+        ).timeout(const Duration(seconds: 8));
+      } catch (e) {
+        // Chỉ log lỗi timeout nếu thực sự chưa có vị trí nào
+        if (_currentLocation == null) {
+          debugPrint('Thử lấy vị trí Medium bị lỗi/timeout: $e');
+          rethrow;
+        }
+      }
+
+      if (position != null) {
+        _currentLocation = LatLng(position.latitude, position.longitude);
+        await _fetchAddress(position.latitude, position.longitude);
+      }
     } catch (e) {
       debugPrint('Lỗi lấy vị trí: $e');
+      // Không để app crash hoặc đứng im khi lỗi vị trí
     } finally {
       _filterOrders();
       _isLoading = false;

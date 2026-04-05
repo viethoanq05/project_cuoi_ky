@@ -46,23 +46,18 @@ class DriverActiveOrdersScreen extends StatelessWidget {
             itemCount: orders.length,
             itemBuilder: (context, index) {
               final order = orders[index];
+              final canCancel = ['preparing', 'pending', 'searching', 'finding_driver'].contains(order.status.toLowerCase());
+              
               return OrderCard(
                 order: order,
                 bottomAction: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _buildStatusDropdown(context, order, orderService),
+                    _buildStatusButton(context, order, orderService),
                     TextButton.icon(
-                      onPressed: () =>
-                          _confirmCancel(context, order, orderService),
-                      icon: const Icon(
-                        Icons.cancel_outlined,
-                        color: Colors.red,
-                      ),
-                      label: const Text(
-                        'Hủy đơn',
-                        style: TextStyle(color: Colors.red),
-                      ),
+                      onPressed: canCancel ? () => _confirmCancel(context, order, orderService) : null,
+                      icon: Icon(Icons.cancel_outlined, color: canCancel ? Colors.red : Colors.grey),
+                      label: Text('Hủy đơn', style: TextStyle(color: canCancel ? Colors.red : Colors.grey)),
                     ),
                   ],
                 ),
@@ -74,40 +69,36 @@ class DriverActiveOrdersScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildStatusDropdown(
-    BuildContext context,
-    OrderData order,
-    OrderService service,
-  ) {
-    final statuses = {
-      'preparing': 'Đang chuẩn bị',
-      'delivering': 'Đang giao',
-      'ready': 'Đã lấy hàng',
-      'on_the_way': 'Đang giao hàng',
-      'delivered': 'Hoàn thành',
-    };
+  Widget _buildStatusButton(BuildContext context, OrderData order, OrderService service) {
+    String currentStatus = order.status.toLowerCase();
+    String nextStatus = '';
+    String buttonText = '';
+    Color buttonColor = Colors.blue;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey[300]!),
-        borderRadius: BorderRadius.circular(8),
+    if (currentStatus == 'preparing') {
+      nextStatus = 'ready';
+      buttonText = 'Xác nhận lấy hàng';
+      buttonColor = Colors.orange;
+    } else if (currentStatus == 'ready') {
+      nextStatus = 'on_the_way';
+      buttonText = 'Bắt đầu giao';
+      buttonColor = Colors.blueAccent;
+    } else if (currentStatus == 'on_the_way') {
+      nextStatus = 'delivered';
+      buttonText = 'Hoàn thành';
+      buttonColor = Colors.green;
+    } else {
+      return const SizedBox.shrink();
+    }
+
+    return FilledButton(
+      onPressed: () => _confirmStatusChange(context, order, nextStatus, service),
+      style: FilledButton.styleFrom(
+        backgroundColor: buttonColor,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: statuses.containsKey(order.status)
-              ? order.status
-              : 'preparing',
-          items: statuses.entries.map((e) {
-            return DropdownMenuItem(value: e.key, child: Text(e.value));
-          }).toList(),
-          onChanged: (newStatus) {
-            if (newStatus != null && newStatus != order.status) {
-              _confirmStatusChange(context, order, newStatus, service);
-            }
-          },
-        ),
-      ),
+      child: Text(buttonText, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
     );
   }
 

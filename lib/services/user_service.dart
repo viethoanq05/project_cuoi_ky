@@ -3,11 +3,10 @@ import 'package:geocoding/geocoding.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:latlong2/latlong.dart';
 
 class UserService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
-  // Cache địa chỉ để tránh gọi API nhiều lần
   static final Map<String, String> _addressCache = {};
 
   bool _looksLikeVietnamCoords(double lat, double lng) {
@@ -39,23 +38,30 @@ class UserService {
     try {
       final doc = await _firestore.collection('Users').doc(uid).get();
       if (doc.exists) return doc.data();
-
-      final query = await _firestore
-          .collection('Users')
-          .where('email', isEqualTo: uid)
-          .limit(1)
-          .get();
+      final query = await _firestore.collection('Users').where('email', isEqualTo: uid).limit(1).get();
       if (query.docs.isNotEmpty) return query.docs.first.data();
-
       return null;
     } catch (e) {
       return null;
     }
   }
 
+  Future<LatLng?> getUserCoordinates(String uid) async {
+    final data = await getUserById(uid);
+    if (data == null) return null;
+    
+    // Xử lý cả GeoPoint và String/Double
+    final pos = data['position'];
+    if (pos is GeoPoint) {
+      return LatLng(pos.latitude, pos.longitude);
+    } else if (data['latitude'] != null && data['longitude'] != null) {
+      return LatLng(data['latitude'].toDouble(), data['longitude'].toDouble());
+    }
+    return null;
+  }
+
   Future<String> getAddressFromCoords(double? lat, double? lng) async {
     if (lat == null || lng == null) return "Không rõ địa chỉ";
-
     final cacheKey = "$lat,$lng";
     if (_addressCache.containsKey(cacheKey)) return _addressCache[cacheKey]!;
 
@@ -101,7 +107,6 @@ class UserService {
           address = (await _reverseWithNominatimVietnam(lat, lng)) ?? '';
         }
       }
-
       if (address.isNotEmpty) {
         _addressCache[cacheKey] = address;
         return address;

@@ -6,6 +6,7 @@ import '../../services/user_service.dart';
 import '../../controller/driver_controller.dart';
 import '../../theme/app_colors.dart';
 import 'package:provider/provider.dart';
+import 'order_map_screen.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final OrderData order;
@@ -113,12 +114,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             onPressed: () async {
               Navigator.of(dialogContext).pop(); // Đóng dialog
               final error = await controller.acceptOrder(widget.order.orderId);
-              if (!mounted) return;
-
-              if (error != null) {
-                (scaffoldMessenger ?? ScaffoldMessenger.of(context))
-                    .showSnackBar(SnackBar(content: Text('Lỗi: $error')));
-                return;
+              if (mounted) {
+                if (error != null) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $error')));
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text('Nhận đơn thành công!'),
+                    backgroundColor: AppColors.success,
+                  ));
+                  controller.setSelectedIndex(1); // Chuyển sang Tab Đơn hàng
+                  Navigator.pop(context); // Quay lại dashboard
+                }
               }
 
               (scaffoldMessenger ?? ScaffoldMessenger.of(context)).showSnackBar(
@@ -139,27 +145,102 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isPending = [
-      'finding_driver',
-      'searching',
-      'dang_tim_xe',
-    ].contains(widget.order.status.toLowerCase());
+    final isPending = ['pending', 'searching', 'dang_tim_xe', 'finding_driver', 'finding-driver']
+        .contains(widget.order.status.toLowerCase());
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Chi tiết đơn hàng'), centerTitle: true),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Thông tin vận chuyển',
-                        style: theme.textTheme.titleMedium,
+      appBar: AppBar(
+        title: const Text('Chi tiết đơn hàng'),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            onPressed: () {
+              final driverController = context.read<DriverController>();
+              final bool isHistory = ['delivered', 'cancelled'].contains(widget.order.status.toLowerCase());
+              
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => OrderMapScreen(
+                    order: widget.order,
+                    currentLocation: driverController.currentLocation,
+                    isHistory: isHistory,
+                  ),
+                ),
+              );
+            },
+            icon: const Icon(Icons.map_rounded),
+            tooltip: 'Xem bản đồ',
+          ),
+        ],
+      ),
+      body: _isLoading 
+        ? const Center(child: CircularProgressIndicator())
+        : SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Thông tin vận chuyển', style: theme.textTheme.titleMedium),
+                    _buildStatusBadge(widget.order.status),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                
+                _buildInfoSection(
+                  title: 'Cửa hàng',
+                  icon: Icons.store_rounded,
+                  children: [
+                    _buildDetailRow('Tên', _storeData?['fullName'] ?? widget.order.storeName),
+                    _buildDetailRow('Địa chỉ', _parsedStoreAddress),
+                  ],
+                ),
+
+                _buildInfoSection(
+                  title: 'Khách hàng',
+                  icon: Icons.person_rounded,
+                  children: [
+                    _buildDetailRow('Người nhận', _customerData?['fullName'] ?? "Khách hàng"),
+                    _buildDetailRow('SĐT', _customerData?['phone'] ?? "Chưa cập nhật"),
+                    _buildDetailRow('Giao đến', _parsedDeliveryAddress),
+                  ],
+                ),
+
+                _buildInfoSection(
+                  title: 'Mặt hàng',
+                  icon: Icons.inventory_2_rounded,
+                  children: widget.order.items.map((item) {
+                    final foodId = item['foodId'] ?? item['food_id'];
+                    final imageUrl = _foodImages[foodId];
+                    final name = item['foodName'] ?? item['name'] ?? 'Sản phẩm';
+                    final price = item['price'] ?? 0;
+                    final qty = item['quantity'] ?? 1;
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: imageUrl != null
+                                ? Image.network(imageUrl, width: 50, height: 50, fit: BoxFit.cover)
+                                : Container(width: 50, height: 50, color: Colors.grey[200], child: const Icon(Icons.fastfood)),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                Text("${currencyFormat.format(price)} x $qty", style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                          Text(currencyFormat.format(price * qty), style: const TextStyle(fontWeight: FontWeight.w500)),
+                        ],
                       ),
                       _buildStatusBadge(widget.order.status),
                     ],
@@ -425,25 +506,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   String _getStatusText(String status) {
     switch (status.toLowerCase()) {
-      case 'pending':
-        return 'Chờ nhận';
+      case 'pending': return 'Chờ nhận';
+      case 'searching': return 'Đang tìm xe';
+      case 'preparing': return 'Đang chuẩn bị';
+      case 'ready': return 'Đã lấy hàng';
+      case 'on_the_way': return 'Đang giao';
+      case 'delivered': return 'Hoàn thành';
+      case 'cancelled': return 'Đã hủy';
       case 'finding_driver':
-      case 'searching':
-      case 'dang_tim_xe':
-        return 'Đang tìm xe';
-      case 'preparing':
-        return 'Đang chuẩn bị';
-      case 'ready':
-        return 'Đã lấy hàng';
-      case 'delivering':
-      case 'on_the_way':
-        return 'Đang giao';
-      case 'delivered':
-        return 'Hoàn thành';
-      case 'cancelled':
-        return 'Đã hủy';
-      default:
-        return status;
+      case 'finding-driver': return 'Đang tìm tài xế';
+      default: return status;
     }
   }
 
