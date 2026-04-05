@@ -21,7 +21,7 @@ class StoreManagementService {
   final SupabaseClient _supabase;
 
   static const String _ordersCollection = 'Orders';
-  static const String _reviewsCollection = 'Reviews';
+  static const String _reviewsCollection = 'reviews';
   static const String _usersCollection = 'Users';
   static const String _storeImageBucket = String.fromEnvironment(
     'SUPABASE_STORE_STORAGE_BUCKET',
