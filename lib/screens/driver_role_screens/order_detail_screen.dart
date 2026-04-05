@@ -126,14 +126,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   Navigator.pop(context); // Quay lại dashboard
                 }
               }
-
-              (scaffoldMessenger ?? ScaffoldMessenger.of(context)).showSnackBar(
-                const SnackBar(
-                  content: Text('Nhận đơn thành công!'),
-                  backgroundColor: AppColors.success,
-                ),
-              );
-              navigator.pop(); // Quay lại dashboard
             },
             child: const Text('Xác nhận'),
           ),
@@ -216,7 +208,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     final foodId = item['foodId'] ?? item['food_id'];
                     final imageUrl = _foodImages[foodId];
                     final name = item['foodName'] ?? item['name'] ?? 'Sản phẩm';
-                    final price = item['price'] ?? 0;
+                    final price = (item['price'] ?? 0).toDouble();
                     final qty = item['quantity'] ?? 1;
 
                     return Padding(
@@ -225,9 +217,25 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         children: [
                           ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: imageUrl != null
-                                ? Image.network(imageUrl, width: 50, height: 50, fit: BoxFit.cover)
-                                : Container(width: 50, height: 50, color: Colors.grey[200], child: const Icon(Icons.fastfood)),
+                            child: imageUrl != null && imageUrl.toString().isNotEmpty
+                                ? Image.network(
+                                    imageUrl,
+                                    width: 50,
+                                    height: 50,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) => Container(
+                                      width: 50,
+                                      height: 50,
+                                      color: Colors.grey[200],
+                                      child: const Icon(Icons.fastfood),
+                                    ),
+                                  )
+                                : Container(
+                                    width: 50,
+                                    height: 50,
+                                    color: Colors.grey[200],
+                                    child: const Icon(Icons.fastfood),
+                                  ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -242,159 +250,64 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           Text(currencyFormat.format(price * qty), style: const TextStyle(fontWeight: FontWeight.w500)),
                         ],
                       ),
-                      _buildStatusBadge(widget.order.status),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
+                    );
+                  }).toList(),
+                ),
 
-                  _buildInfoSection(
-                    title: 'Cửa hàng',
-                    icon: Icons.store_rounded,
-                    children: [
-                      _buildDetailRow(
-                        'Tên',
-                        _storeData?['fullName'] ?? widget.order.storeName,
-                      ),
-                      _buildDetailRow('Địa chỉ', _parsedStoreAddress),
-                    ],
-                  ),
-
-                  _buildInfoSection(
-                    title: 'Khách hàng',
-                    icon: Icons.person_rounded,
-                    children: [
-                      _buildDetailRow(
-                        'Người nhận',
-                        _customerData?['fullName'] ?? "Khách hàng",
-                      ),
-                      _buildDetailRow(
-                        'SĐT',
-                        _customerData?['phone'] ?? "Chưa cập nhật",
-                      ),
-                      _buildDetailRow('Giao đến', _parsedDeliveryAddress),
-                    ],
-                  ),
-
-                  _buildInfoSection(
-                    title: 'Mặt hàng',
-                    icon: Icons.inventory_2_rounded,
-                    children: widget.order.items.map((item) {
-                      final foodId = item['foodId'] ?? item['food_id'];
-                      final imageUrl = _foodImages[foodId];
-                      final name =
-                          item['foodName'] ?? item['name'] ?? 'Sản phẩm';
-                      final price = item['price'] ?? 0;
-                      final qty = item['quantity'] ?? 1;
-
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Row(
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: imageUrl != null
-                                  ? Image.network(
-                                      imageUrl,
-                                      width: 50,
-                                      height: 50,
-                                      fit: BoxFit.cover,
-                                    )
-                                  : Container(
-                                      width: 50,
-                                      height: 50,
-                                      color: Colors.grey[200],
-                                      child: const Icon(Icons.fastfood),
-                                    ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    name,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  Text(
-                                    "${currencyFormat.format(price)} x $qty",
-                                    style: TextStyle(
-                                      color: Colors.grey[600],
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Text(
-                              currencyFormat.format(price * qty),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ),
-
-                  _buildInfoSection(
-                    title: 'Thanh toán',
-                    icon: Icons.payments_rounded,
-                    isLast: true,
-                    children: [
-                      _buildMoneyRow('Giá tiền món', widget.order.totalAmount),
-                      _buildMoneyRow('Phí dịch vụ', widget.order.deliveryFee),
-                      const Divider(height: 24),
-                      _buildMoneyRow(
-                        'TỔNG THU NHẬP',
-                        widget.order.totalAmount + widget.order.deliveryFee,
-                        isTotal: true,
-                      ),
-                    ],
-                  ),
-
-                  if (widget.order.proofImage != null &&
-                      widget.order.proofImage!.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    Text(
-                      'Minh chứng giao hàng',
-                      style: theme.textTheme.titleSmall,
-                    ),
-                    const SizedBox(height: 12),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Image.network(
-                        widget.order.proofImage!,
-                        width: double.infinity,
-                        height: 250,
-                        fit: BoxFit.cover,
-                      ),
+                _buildInfoSection(
+                  title: 'Thanh toán',
+                  icon: Icons.payments_rounded,
+                  isLast: true,
+                  children: [
+                    _buildMoneyRow('Giá tiền món', widget.order.totalAmount),
+                    _buildMoneyRow('Phí dịch vụ', widget.order.deliveryFee),
+                    const Divider(height: 24),
+                    _buildMoneyRow(
+                      'TỔNG THU NHẬP',
+                      widget.order.totalAmount + widget.order.deliveryFee,
+                      isTotal: true,
                     ),
                   ],
+                ),
 
-                  const SizedBox(height: 40),
-
-                  if (isPending &&
-                      (widget.order.driverId == null ||
-                          widget.order.driverId!.isEmpty))
-                    SizedBox(
+                if (widget.order.proofImage != null &&
+                    widget.order.proofImage!.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  Text(
+                    'Minh chứng giao hàng',
+                    style: theme.textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 12),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.network(
+                      widget.order.proofImage!,
                       width: double.infinity,
-                      height: 56,
-                      child: FilledButton(
-                        onPressed: () => _confirmAcceptOrder(
-                          context,
-                          context.read<DriverController>(),
-                        ),
-                        child: const Text('NHẬN ĐƠN HÀNG NÀY'),
-                      ),
+                      height: 250,
+                      fit: BoxFit.cover,
                     ),
-
-                  if (widget.actionButton != null) widget.actionButton!,
+                  ),
                 ],
-              ),
+
+                const SizedBox(height: 40),
+
+                if (isPending && (widget.order.driverId == null || widget.order.driverId!.isEmpty))
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: FilledButton(
+                      onPressed: () => _confirmAcceptOrder(
+                        context,
+                        context.read<DriverController>(),
+                      ),
+                      child: const Text('NHẬN ĐƠN HÀNG NÀY'),
+                    ),
+                  ),
+
+                if (widget.actionButton != null) widget.actionButton!,
+              ],
             ),
+          ),
     );
   }
 
