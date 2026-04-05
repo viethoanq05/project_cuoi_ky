@@ -14,10 +14,7 @@ class DriverActiveOrdersScreen extends StatelessWidget {
     final orderService = OrderService();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Đơn hàng hiện tại'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('Đơn hàng hiện tại'), centerTitle: true),
       body: StreamBuilder<List<OrderData>>(
         stream: orderService.watchDriverActiveOrders(driverId),
         builder: (context, snapshot) {
@@ -32,7 +29,11 @@ class DriverActiveOrdersScreen extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.assignment_outlined, size: 64, color: Colors.grey[400]),
+                  Icon(
+                    Icons.assignment_outlined,
+                    size: 64,
+                    color: Colors.grey[400],
+                  ),
                   const SizedBox(height: 16),
                   const Text('Bạn không có đơn hàng nào đang thực hiện'),
                 ],
@@ -52,9 +53,16 @@ class DriverActiveOrdersScreen extends StatelessWidget {
                   children: [
                     _buildStatusDropdown(context, order, orderService),
                     TextButton.icon(
-                      onPressed: () => _confirmCancel(context, order, orderService),
-                      icon: const Icon(Icons.cancel_outlined, color: Colors.red),
-                      label: const Text('Hủy đơn', style: TextStyle(color: Colors.red)),
+                      onPressed: () =>
+                          _confirmCancel(context, order, orderService),
+                      icon: const Icon(
+                        Icons.cancel_outlined,
+                        color: Colors.red,
+                      ),
+                      label: const Text(
+                        'Hủy đơn',
+                        style: TextStyle(color: Colors.red),
+                      ),
                     ),
                   ],
                 ),
@@ -66,12 +74,17 @@ class DriverActiveOrdersScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildStatusDropdown(BuildContext context, OrderData order, OrderService service) {
+  Widget _buildStatusDropdown(
+    BuildContext context,
+    OrderData order,
+    OrderService service,
+  ) {
     final statuses = {
       'preparing': 'Đang chuẩn bị',
+      'delivering': 'Đang giao',
       'ready': 'Đã lấy hàng',
       'on_the_way': 'Đang giao hàng',
-      'delivered': 'Hoàn thành'
+      'delivered': 'Hoàn thành',
     };
 
     return Container(
@@ -82,7 +95,9 @@ class DriverActiveOrdersScreen extends StatelessWidget {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: statuses.containsKey(order.status) ? order.status : 'preparing',
+          value: statuses.containsKey(order.status)
+              ? order.status
+              : 'preparing',
           items: statuses.entries.map((e) {
             return DropdownMenuItem(value: e.key, child: Text(e.value));
           }).toList(),
@@ -96,21 +111,33 @@ class DriverActiveOrdersScreen extends StatelessWidget {
     );
   }
 
-  void _confirmStatusChange(BuildContext context, OrderData order, String newStatus, OrderService service) {
+  void _confirmStatusChange(
+    BuildContext context,
+    OrderData order,
+    String newStatus,
+    OrderService service,
+  ) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Chuyển trạng thái'),
-        content: Text('Bạn muốn chuyển đơn hàng sang trạng thái ${_getStatusName(newStatus)}?'),
+        content: Text(
+          'Bạn muốn chuyển đơn hàng sang trạng thái ${_getStatusName(newStatus)}?',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Hủy')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Hủy'),
+          ),
           FilledButton(
             onPressed: () {
               Navigator.pop(context);
               if (newStatus == 'delivered') {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => DeliveryConfirmationScreen(order: order)),
+                  MaterialPageRoute(
+                    builder: (_) => DeliveryConfirmationScreen(order: order),
+                  ),
                 );
               } else {
                 service.updateOrderStatus(order.orderId, newStatus);
@@ -123,20 +150,32 @@ class DriverActiveOrdersScreen extends StatelessWidget {
     );
   }
 
-  void _confirmCancel(BuildContext context, OrderData order, OrderService service) {
+  void _confirmCancel(
+    BuildContext context,
+    OrderData order,
+    OrderService service,
+  ) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Hủy đơn hàng'),
-        content: const Text('Bạn có chắc chắn muốn hủy nhận đơn hàng này? Đơn hàng sẽ được trả về danh sách chờ.'),
+        content: const Text(
+          'Bạn có chắc chắn muốn hủy nhận đơn hàng này? Đơn hàng sẽ được trả về danh sách chờ.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Đóng')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Đóng'),
+          ),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
               service.driverCancelOrder(order.orderId);
             },
-            child: const Text('Đồng ý hủy', style: TextStyle(color: Colors.red)),
+            child: const Text(
+              'Đồng ý hủy',
+              style: TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),
@@ -145,11 +184,18 @@ class DriverActiveOrdersScreen extends StatelessWidget {
 
   String _getStatusName(String status) {
     switch (status) {
-      case 'preparing': return 'Đang chuẩn bị';
-      case 'ready': return 'Đã lấy hàng';
-      case 'on_the_way': return 'Đang giao hàng';
-      case 'delivered': return 'Hoàn thành';
-      default: return status;
+      case 'preparing':
+        return 'Đang chuẩn bị';
+      case 'delivering':
+        return 'Đang giao';
+      case 'ready':
+        return 'Đã lấy hàng';
+      case 'on_the_way':
+        return 'Đang giao hàng';
+      case 'delivered':
+        return 'Hoàn thành';
+      default:
+        return status;
     }
   }
 }

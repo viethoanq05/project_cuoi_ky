@@ -39,6 +39,7 @@ class StoreTicketStatusChip extends StatelessWidget {
           foreground: theme.colorScheme.onSecondaryContainer,
         );
       case 'preparing':
+      case 'finding_driver':
         return (
           background: const Color(0xFFFFF3CD),
           foreground: const Color(0xFF7A4A00),

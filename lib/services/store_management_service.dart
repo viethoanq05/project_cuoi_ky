@@ -129,16 +129,64 @@ class StoreManagementService {
     required String ticketId,
     required StoreTicketStatus status,
   }) async {
+    final updateData = <String, dynamic>{
+      'status': status.value,
+      'order_status': status.value,
+      'updated_at': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'store_id': currentStoreId,
+    };
+
     await _firestore
         .collection(_ordersCollection)
         .doc(ticketId)
-        .set(<String, dynamic>{
-          'status': status.value,
-          'order_status': status.value,
-          'updated_at': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-          'store_id': currentStoreId,
-        }, SetOptions(merge: true));
+        .set(updateData, SetOptions(merge: true));
+
+    await _mirrorOrderUpdate(ticketId, updateData);
+  }
+
+  Future<void> _mirrorOrderUpdate(
+    String orderId,
+    Map<String, dynamic> updateData,
+  ) async {
+    try {
+      final orderDoc = await _firestore
+          .collection(_ordersCollection)
+          .doc(orderId)
+          .get();
+      final data = orderDoc.data();
+      if (data == null) {
+        return;
+      }
+
+      final customerId =
+          (data['user_id'] ?? data['customer_id'] ?? data['customerId'] ?? '')
+              .toString()
+              .trim();
+      final storeId = (data['store_id'] ?? data['storeId'] ?? currentStoreId)
+          .toString()
+          .trim();
+
+      if (customerId.isNotEmpty) {
+        await _firestore
+            .collection(_usersCollection)
+            .doc(customerId)
+            .collection(_ordersCollection)
+            .doc(orderId)
+            .set(updateData, SetOptions(merge: true));
+      }
+
+      if (storeId.isNotEmpty) {
+        await _firestore
+            .collection(_usersCollection)
+            .doc(storeId)
+            .collection(_ordersCollection)
+            .doc(orderId)
+            .set(updateData, SetOptions(merge: true));
+      }
+    } catch (_) {
+      // Best-effort only.
+    }
   }
 
   Stream<List<StoreReview>> watchReviews() {

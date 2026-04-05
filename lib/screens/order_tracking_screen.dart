@@ -22,23 +22,21 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   void initState() {
     super.initState();
     Future.microtask(() {
-      context.read<OrderTrackingProvider>().watchOrder(widget.orderId, widget.userId);
+      context.read<OrderTrackingProvider>().watchOrder(
+        widget.orderId,
+        widget.userId,
+      );
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Order Tracking'),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text('Order Tracking'), elevation: 0),
       body: Consumer<OrderTrackingProvider>(
         builder: (context, provider, _) {
           if (provider.isLoading) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
+            return const Center(child: CircularProgressIndicator());
           }
 
           if (provider.isError) {
@@ -62,9 +60,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           }
 
           if (provider.order == null) {
-            return const Center(
-              child: Text('Order not found'),
-            );
+            return const Center(child: Text('Order not found'));
           }
 
           final order = provider.order!;
@@ -127,8 +123,16 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   }
 
   Widget _buildOrderTimeline(OrderTrackingProvider provider) {
-    final statuses = ['pending', 'confirmed', 'preparing', 'delivering', 'completed', 'delivered'];
-    final currentStatus = provider.order!.status;
+    final statuses = [
+      'pending',
+      'confirmed',
+      'preparing',
+      'finding_driver',
+      'delivering',
+      'completed',
+      'delivered',
+    ];
+    final currentStatus = _normalizeStatus(provider.order!.status);
     final currentIndex = statuses.indexOf(currentStatus);
 
     return Column(
@@ -155,12 +159,18 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: isCompleted ? Colors.green : Colors.grey.shade300,
+                        color: isCompleted
+                            ? Colors.green
+                            : Colors.grey.shade300,
                         shape: BoxShape.circle,
                       ),
                       child: Center(
                         child: isCompleted
-                            ? const Icon(Icons.check, color: Colors.white, size: 20)
+                            ? const Icon(
+                                Icons.check,
+                                color: Colors.white,
+                                size: 20,
+                              )
                             : Text(
                                 '${index + 1}',
                                 style: const TextStyle(
@@ -176,7 +186,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                       _getStatusLabel(status),
                       style: TextStyle(
                         fontSize: 10,
-                        fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                        fontWeight: isCurrent
+                            ? FontWeight.bold
+                            : FontWeight.normal,
                         color: isCurrent ? Colors.green : Colors.grey,
                       ),
                       textAlign: TextAlign.center,
@@ -228,7 +240,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    order.id.length >= 12 ? order.id.substring(0, 12) : order.id,
+                    order.id.length >= 12
+                        ? order.id.substring(0, 12)
+                        : order.id,
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ],
@@ -340,7 +354,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               ),
               Text(
                 '${order.totalPrice.toStringAsFixed(0)}đ',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
               ),
             ],
           ),
@@ -349,8 +366,13 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     );
   }
 
-  Widget _buildActionButtons(BuildContext context, OrderTrackingProvider provider, dynamic order) {
-    final canReview = order.status == 'completed' || order.status == 'delivered';
+  Widget _buildActionButtons(
+    BuildContext context,
+    OrderTrackingProvider provider,
+    dynamic order,
+  ) {
+    final canReview =
+        order.status == 'completed' || order.status == 'delivered';
     final canCancel = provider.canCancel;
 
     return Column(
@@ -391,7 +413,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   context: context,
                   builder: (context) => AlertDialog(
                     title: const Text('Cancel Order'),
-                    content: const Text('Are you sure you want to cancel this order?'),
+                    content: const Text(
+                      'Are you sure you want to cancel this order?',
+                    ),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(context, false),
@@ -439,6 +463,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         return 'Confirmed';
       case 'preparing':
         return 'Preparing';
+      case 'finding_driver':
+        return 'Finding Driver';
       case 'delivering':
         return 'Delivering';
       case 'completed':
@@ -447,5 +473,16 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       default:
         return status;
     }
+  }
+
+  String _normalizeStatus(String status) {
+    final normalized = status.trim().toLowerCase();
+    if (normalized == 'on_the_way') {
+      return 'delivering';
+    }
+    if (normalized == 'searching' || normalized == 'dang_tim_xe') {
+      return 'finding_driver';
+    }
+    return normalized;
   }
 }

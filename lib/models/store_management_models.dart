@@ -3,6 +3,10 @@ class StoreTicketStatus {
 
   static const pending = StoreTicketStatus('pending', 'Chờ xác nhận');
   static const preparing = StoreTicketStatus('preparing', 'Đang chuẩn bị');
+  static const findingDriver = StoreTicketStatus(
+    'finding_driver',
+    'Đang tìm tài xế',
+  );
   static const delivering = StoreTicketStatus('delivering', 'Đang giao');
   static const completed = StoreTicketStatus('completed', 'Hoàn thành');
   static const cancelled = StoreTicketStatus('cancelled', 'Đã hủy');
@@ -10,6 +14,7 @@ class StoreTicketStatus {
   static const values = <StoreTicketStatus>[
     pending,
     preparing,
+    findingDriver,
     delivering,
     completed,
     cancelled,
@@ -22,6 +27,12 @@ class StoreTicketStatus {
     final normalized = value?.toString().trim().toLowerCase() ?? '';
     if (normalized == 'delivered') {
       return completed;
+    }
+    if (normalized == 'on_the_way') {
+      return delivering;
+    }
+    if (normalized == 'searching' || normalized == 'dang_tim_xe') {
+      return findingDriver;
     }
     for (final status in values) {
       if (status.value == normalized) {

@@ -3,7 +3,11 @@ import '../../models/app_user.dart';
 import '../../services/auth_service.dart';
 
 class EditProfileScreen extends StatefulWidget {
-  const EditProfileScreen({super.key, required this.user, required this.authService});
+  const EditProfileScreen({
+    super.key,
+    required this.user,
+    required this.authService,
+  });
 
   final AppUser user;
   final AuthService authService;
@@ -53,9 +57,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -64,13 +68,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Chỉnh sửa hồ sơ'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('Chỉnh sửa hồ sơ'), centerTitle: true),
       body: _isSaving
           ? const Center(child: CircularProgressIndicator())
           : Form(
@@ -82,37 +81,43 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   children: [
                     const Text(
                       'Thông tin cá nhân',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blueAccent,
+                      ),
                     ),
                     const SizedBox(height: 24),
                     TextFormField(
                       controller: _nameController,
                       decoration: const InputDecoration(
-                        labelText: 'Họ và tên', 
+                        labelText: 'Họ và tên',
                         prefixIcon: Icon(Icons.person_outline),
                         border: OutlineInputBorder(),
                         hintText: 'Nhập họ và tên đầy đủ',
                       ),
-                      validator: (v) => (v == null || v.isEmpty) ? 'Vui lòng nhập tên' : null,
+                      validator: (v) =>
+                          (v == null || v.isEmpty) ? 'Vui lòng nhập tên' : null,
                     ),
                     const SizedBox(height: 20),
                     TextFormField(
                       controller: _phoneController,
                       decoration: const InputDecoration(
-                        labelText: 'Số điện thoại', 
+                        labelText: 'Số điện thoại',
                         prefixIcon: Icon(Icons.phone_outlined),
                         border: OutlineInputBorder(),
                         hintText: 'Nhập số điện thoại liên lạc',
                       ),
                       keyboardType: TextInputType.phone,
-                      validator: (v) => (v == null || v.isEmpty) ? 'Vui lòng nhập SĐT' : null,
+                      validator: (v) =>
+                          (v == null || v.isEmpty) ? 'Vui lòng nhập SĐT' : null,
                     ),
                     const SizedBox(height: 20),
                     // Hiển thị Email dạng Read-only để người dùng xem
                     TextFormField(
                       initialValue: widget.user.email,
                       decoration: const InputDecoration(
-                        labelText: 'Email (Không thể thay đổi)', 
+                        labelText: 'Email (Không thể thay đổi)',
                         prefixIcon: Icon(Icons.email_outlined),
                         border: OutlineInputBorder(),
                         filled: true,
@@ -127,7 +132,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       child: FilledButton.icon(
                         onPressed: _saveProfile,
                         icon: const Icon(Icons.save),
-                        label: const Text('LƯU THAY ĐỔI', style: TextStyle(fontWeight: FontWeight.bold)),
+                        label: const Text(
+                          'LƯU THAY ĐỔI',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
                       ),
                     ),
                   ],

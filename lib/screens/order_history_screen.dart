@@ -7,18 +7,12 @@ import 'review_order_screen.dart';
 class OrderHistoryScreen extends StatelessWidget {
   final String userId;
 
-  const OrderHistoryScreen({
-    Key? key,
-    required this.userId,
-  }) : super(key: key);
+  const OrderHistoryScreen({Key? key, required this.userId}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Order History'),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text('Order History'), elevation: 0),
       body: StreamBuilder<List<OrderData>>(
         stream: OrderService().watchCustomerOrders(userId),
         builder: (context, snapshot) {
@@ -53,11 +47,7 @@ class OrderHistoryScreen extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.history,
-                    size: 64,
-                    color: Colors.grey.shade400,
-                  ),
+                  Icon(Icons.history, size: 64, color: Colors.grey.shade400),
                   const SizedBox(height: 16),
                   const Text(
                     'No orders yet',
@@ -94,10 +84,8 @@ class OrderHistoryScreen extends StatelessWidget {
       onTap: () {
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (context) => OrderTrackingScreen(
-              orderId: order.orderId,
-              userId: userId,
-            ),
+            builder: (context) =>
+                OrderTrackingScreen(orderId: order.orderId, userId: userId),
           ),
         );
       },
@@ -156,10 +144,7 @@ class OrderHistoryScreen extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 '${order.items.length} item${order.items.length > 1 ? 's' : ''}',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey,
-                ),
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),
               const SizedBox(height: 8),
               Row(
@@ -181,10 +166,7 @@ class OrderHistoryScreen extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 'Payment: ${_getPaymentMethodLabel(order.paymentMethod)}',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey,
-                ),
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),
               const SizedBox(height: 12),
               Row(
@@ -219,7 +201,8 @@ class OrderHistoryScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (order.status == 'on_the_way') ...[
+                  if (order.status == 'on_the_way' ||
+                      order.status == 'delivering') ...[
                     const SizedBox(width: 8),
                     Expanded(
                       child: SizedBox(
@@ -311,8 +294,11 @@ class OrderHistoryScreen extends StatelessWidget {
         return 'Đã xác nhận';
       case 'preparing':
         return 'Đang chuẩn bị';
+      case 'finding_driver':
+        return 'Đang tìm tài xế';
       case 'ready':
         return 'Sẵn sàng';
+      case 'delivering':
       case 'on_the_way':
         return 'Đang giao';
       case 'delivered':
@@ -332,6 +318,9 @@ class OrderHistoryScreen extends StatelessWidget {
       case 'preparing':
       case 'ready':
         return Colors.blue;
+      case 'finding_driver':
+        return Colors.blue;
+      case 'delivering':
       case 'on_the_way':
         return Colors.purple;
       case 'delivered':

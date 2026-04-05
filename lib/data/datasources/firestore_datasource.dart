@@ -7,7 +7,7 @@ class FirestoreDatasource {
   final FirebaseFirestore _firebaseFirestore;
 
   FirestoreDatasource({FirebaseFirestore? firebaseFirestore})
-      : _firebaseFirestore = firebaseFirestore ?? FirebaseFirestore.instance;
+    : _firebaseFirestore = firebaseFirestore ?? FirebaseFirestore.instance;
 
   // ============ ORDER OPERATIONS ============
 
@@ -29,14 +29,32 @@ class FirestoreDatasource {
         'items': items,
         'total_price': totalPrice,
         'status': 'pending',
+        'order_status': 'pending',
         'payment_method': paymentMethod,
         'delivery_address': deliveryAddress,
         'scheduled_time': scheduledTime?.toIso8601String(),
         'created_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
+        'updatedAt': DateTime.now().toIso8601String(),
       };
 
       await _firebaseFirestore.collection('Orders').doc(orderId).set(orderData);
+
+      // Mirror into user subcollections for realtime UIs that watch
+      // Users/{id}/Orders/{orderId}.
+      await _firebaseFirestore
+          .collection('Users')
+          .doc(userId)
+          .collection('Orders')
+          .doc(orderId)
+          .set(orderData);
+
+      await _firebaseFirestore
+          .collection('Users')
+          .doc(storeId)
+          .collection('Orders')
+          .doc(orderId)
+          .set(orderData);
 
       return OrderModel.fromJson(orderData);
     } catch (e) {
@@ -63,37 +81,28 @@ class FirestoreDatasource {
   }
 
   Stream<OrderModel?> watchOrder(String orderId) {
-    return _firebaseFirestore
-        .collection('Orders')
-        .doc(orderId)
-        .snapshots()
-        .map((snapshot) {
-      if (snapshot.exists && snapshot.data() != null) {
-        return OrderModel.fromJson(snapshot.data()!);
-      }
-      return null;
-    });
+    return _firebaseFirestore.collection('Orders').doc(orderId).snapshots().map(
+      (snapshot) {
+        if (snapshot.exists && snapshot.data() != null) {
+          return OrderModel.fromJson(snapshot.data()!);
+        }
+        return null;
+      },
+    );
   }
 
   Stream<OrderModel?> watchOrderFromUser(String orderId, String userId) {
-    return _firebaseFirestore
-        .collection('Users')
-        .doc(userId)
-        .collection('Orders')
-        .doc(orderId)
-        .snapshots()
-        .map((snapshot) {
-      if (snapshot.exists && snapshot.data() != null) {
-        return OrderModel.fromJson(snapshot.data()!);
-      }
-      return null;
-    });
+    // For backwards-compatibility (older orders may not have been mirrored
+    // into Users/{id}/Orders). Prefer the main Orders collection.
+    return watchOrder(orderId);
   }
 
   Future<OrderModel?> getOrderById(String orderId) async {
     try {
-      final doc =
-          await _firebaseFirestore.collection('Orders').doc(orderId).get();
+      final doc = await _firebaseFirestore
+          .collection('Orders')
+          .doc(orderId)
+          .get();
       if (doc.exists && doc.data() != null) {
         return OrderModel.fromJson(doc.data()!);
       }
@@ -105,10 +114,49 @@ class FirestoreDatasource {
 
   Future<void> updateOrderStatus(String orderId, String newStatus) async {
     try {
-      await _firebaseFirestore.collection('Orders').doc(orderId).update({
+      final now = DateTime.now().toIso8601String();
+      final updateData = {
         'status': newStatus,
-        'updated_at': DateTime.now().toIso8601String(),
-      });
+        'order_status': newStatus,
+        'updated_at': now,
+        'updatedAt': now,
+      };
+
+      final orderRef = _firebaseFirestore.collection('Orders').doc(orderId);
+      await orderRef.update(updateData);
+
+      // Best-effort mirror update.
+      final orderDoc = await orderRef.get();
+      final order = orderDoc.data();
+      if (order == null) {
+        return;
+      }
+
+      final userId = (order['user_id'] ?? order['customer_id'] ?? '')
+          .toString();
+      final storeId = (order['store_id'] ?? '').toString();
+
+      if (userId.trim().isNotEmpty) {
+        try {
+          await _firebaseFirestore
+              .collection('Users')
+              .doc(userId)
+              .collection('Orders')
+              .doc(orderId)
+              .set(updateData, SetOptions(merge: true));
+        } catch (_) {}
+      }
+
+      if (storeId.trim().isNotEmpty) {
+        try {
+          await _firebaseFirestore
+              .collection('Users')
+              .doc(storeId)
+              .collection('Orders')
+              .doc(orderId)
+              .set(updateData, SetOptions(merge: true));
+        } catch (_) {}
+      }
     } catch (e) {
       rethrow;
     }
@@ -118,8 +166,10 @@ class FirestoreDatasource {
 
   Future<UserProfileModel> getUserProfile(String userId) async {
     try {
-      final doc =
-          await _firebaseFirestore.collection('Users').doc(userId).get();
+      final doc = await _firebaseFirestore
+          .collection('Users')
+          .doc(userId)
+          .get();
       if (doc.exists && doc.data() != null) {
         return UserProfileModel.fromJson(doc.data()!);
       }
@@ -130,11 +180,9 @@ class FirestoreDatasource {
   }
 
   Stream<UserProfileModel?> watchUserProfile(String userId) {
-    return _firebaseFirestore
-        .collection('Users')
-        .doc(userId)
-        .snapshots()
-        .map((snapshot) {
+    return _firebaseFirestore.collection('Users').doc(userId).snapshots().map((
+      snapshot,
+    ) {
       if (snapshot.exists && snapshot.data() != null) {
         return UserProfileModel.fromJson(snapshot.data()!);
       }
@@ -167,8 +215,10 @@ class FirestoreDatasource {
 
   Future<bool> validateWalletBalance(String userId, double amount) async {
     try {
-      final doc =
-          await _firebaseFirestore.collection('Users').doc(userId).get();
+      final doc = await _firebaseFirestore
+          .collection('Users')
+          .doc(userId)
+          .get();
       if (doc.exists && doc.data() != null) {
         final walletBalance =
             (doc.data()!['wallet_balance'] as num?)?.toDouble() ?? 0.0;
@@ -182,12 +232,9 @@ class FirestoreDatasource {
 
   Future<void> deductWalletBalance(String userId, double amount) async {
     try {
-      await _firebaseFirestore
-          .collection('Users')
-          .doc(userId)
-          .update({
-            'wallet_balance': FieldValue.increment(-amount),
-          });
+      await _firebaseFirestore.collection('Users').doc(userId).update({
+        'wallet_balance': FieldValue.increment(-amount),
+      });
     } catch (e) {
       rethrow;
     }
@@ -195,12 +242,9 @@ class FirestoreDatasource {
 
   Future<void> addWalletBalance(String userId, double amount) async {
     try {
-      await _firebaseFirestore
-          .collection('Users')
-          .doc(userId)
-          .update({
-            'wallet_balance': FieldValue.increment(amount),
-          });
+      await _firebaseFirestore.collection('Users').doc(userId).update({
+        'wallet_balance': FieldValue.increment(amount),
+      });
     } catch (e) {
       rethrow;
     }
@@ -240,7 +284,10 @@ class FirestoreDatasource {
         'created_at': DateTime.now().toIso8601String(),
       };
 
-      await _firebaseFirestore.collection('reviews').doc(reviewId).set(reviewData);
+      await _firebaseFirestore
+          .collection('reviews')
+          .doc(reviewId)
+          .set(reviewData);
 
       return ReviewModel.fromJson(reviewData);
     } catch (e) {
@@ -294,6 +341,8 @@ class FirestoreDatasource {
     DateTime? scheduledTime,
   }) async {
     try {
+      final now = DateTime.now().toIso8601String();
+
       await _firebaseFirestore.runTransaction((transaction) async {
         final userRef = _firebaseFirestore.collection('Users').doc(userId);
         final userDoc = await transaction.get(userRef);
@@ -317,19 +366,38 @@ class FirestoreDatasource {
 
         // Create order
         final orderRef = _firebaseFirestore.collection('Orders').doc(orderId);
-        transaction.set(orderRef, {
+        final orderData = {
           'id': orderId,
           'user_id': userId,
           'store_id': storeId,
           'items': items,
           'total_price': totalPrice,
           'status': 'pending',
+          'order_status': 'pending',
           'payment_method': 'wallet',
           'delivery_address': deliveryAddress,
           'scheduled_time': scheduledTime?.toIso8601String(),
-          'created_at': DateTime.now().toIso8601String(),
-          'updated_at': DateTime.now().toIso8601String(),
-        });
+          'created_at': now,
+          'updated_at': now,
+          'updatedAt': now,
+        };
+
+        transaction.set(orderRef, orderData);
+
+        // Mirror into user subcollections.
+        final userOrderRef = _firebaseFirestore
+            .collection('Users')
+            .doc(userId)
+            .collection('Orders')
+            .doc(orderId);
+        transaction.set(userOrderRef, orderData);
+
+        final storeOrderRef = _firebaseFirestore
+            .collection('Users')
+            .doc(storeId)
+            .collection('Orders')
+            .doc(orderId);
+        transaction.set(storeOrderRef, orderData);
       });
     } catch (e) {
       rethrow;

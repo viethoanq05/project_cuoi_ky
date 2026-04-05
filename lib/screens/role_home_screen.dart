@@ -1047,14 +1047,46 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
         }
 
         final nextStatus = _acceptedOrderStatus(existingStatus);
-        tx.update(orderRef, <String, dynamic>{
+        final updateData = <String, dynamic>{
           _orderStatusField: nextStatus,
           'status': nextStatus,
           'driver_id': driverUid,
           'driver_name': driverName,
           'accepted_at': FieldValue.serverTimestamp(),
           'updated_at': FieldValue.serverTimestamp(),
-        });
+          'updatedAt': FieldValue.serverTimestamp(),
+        };
+
+        tx.update(orderRef, updateData);
+
+        final customerId =
+            (order['user_id'] ??
+                    order['customer_id'] ??
+                    order['customerId'] ??
+                    '')
+                .toString()
+                .trim();
+        final storeId = (order['store_id'] ?? order['storeId'] ?? '')
+            .toString()
+            .trim();
+
+        if (customerId.isNotEmpty) {
+          final customerOrderRef = _firestore
+              .collection(_usersCollection)
+              .doc(customerId)
+              .collection(_ordersCollection)
+              .doc(orderRef.id);
+          tx.set(customerOrderRef, updateData, SetOptions(merge: true));
+        }
+
+        if (storeId.isNotEmpty) {
+          final storeOrderRef = _firestore
+              .collection(_usersCollection)
+              .doc(storeId)
+              .collection(_ordersCollection)
+              .doc(orderRef.id);
+          tx.set(storeOrderRef, updateData, SetOptions(merge: true));
+        }
 
         final driverRef = _userDoc(driverUid);
         tx.update(driverRef, <String, dynamic>{
@@ -1089,6 +1121,7 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
     }
   }
 
+  // ignore: unused_element
   Widget _buildDriverHome(AppUser user) {
     final driverUid = user.id;
     final driverName = _displayName(user);

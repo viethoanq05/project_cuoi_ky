@@ -150,7 +150,10 @@ class OrderService extends ChangeNotifier {
     return _firestore
         .collection(_ordersCollection)
         .where('driverId', isEqualTo: driverId)
-        .where('status', whereIn: ['preparing', 'on_the_way', 'ready'])
+        .where(
+          'status',
+          whereIn: ['delivering', 'on_the_way', 'ready', 'preparing'],
+        )
         .snapshots()
         .map((snapshot) {
           final orders = snapshot.docs
@@ -242,7 +245,7 @@ class OrderService extends ChangeNotifier {
   }
 
   Future<void> acceptOrder(String orderId, String driverId) async {
-    await updateOrderStatus(orderId, 'preparing', driverId: driverId);
+    await updateOrderStatus(orderId, 'delivering', driverId: driverId);
   }
 
   Future<void> driverCancelOrder(String orderId) async {
@@ -299,6 +302,8 @@ class OrderService extends ChangeNotifier {
       return;
     }
 
+    final mirrorData = <String, dynamic>{...orderData, ...updateData};
+
     final order = OrderData.fromMap({...orderData, 'orderId': orderId});
 
     final customerOrderRef = _firestore
@@ -313,11 +318,11 @@ class OrderService extends ChangeNotifier {
         .doc(orderId);
 
     try {
-      await customerOrderRef.update(updateData);
+      await customerOrderRef.set(mirrorData, SetOptions(merge: true));
     } catch (_) {}
 
     try {
-      await storeOrderRef.update(updateData);
+      await storeOrderRef.set(mirrorData, SetOptions(merge: true));
     } catch (_) {}
   }
 }
