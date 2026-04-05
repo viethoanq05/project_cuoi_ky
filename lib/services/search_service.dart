@@ -185,7 +185,7 @@ class SearchService {
           .where('price', isLessThanOrEqualTo: maxPrice);
 
       if (storeId != null) {
-        query = query.where('storeId', isEqualTo: storeId);
+        query = query.where('store_id', isEqualTo: storeId);
       }
 
       final snapshot = await query.get();

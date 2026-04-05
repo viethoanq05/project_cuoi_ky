@@ -233,7 +233,25 @@ class _FoodListScreenState extends State<FoodListScreen> {
                   height: 120,
                   color: Colors.grey[300],
                   child: food.image.isNotEmpty
-                      ? Image.network(food.image, fit: BoxFit.cover)
+                      ? LayoutBuilder(
+                          builder: (context, constraints) {
+                            final dpr = MediaQuery.devicePixelRatioOf(context);
+                            final cacheWidth = (constraints.maxWidth * dpr)
+                                .round();
+                            final cacheHeight = (120 * dpr).round();
+
+                            return Image.network(
+                              food.image,
+                              fit: BoxFit.cover,
+                              filterQuality: FilterQuality.medium,
+                              isAntiAlias: true,
+                              cacheWidth: cacheWidth > 0 ? cacheWidth : null,
+                              cacheHeight: cacheHeight > 0 ? cacheHeight : null,
+                              errorBuilder: (_, _, _) =>
+                                  const Center(child: Icon(Icons.broken_image)),
+                            );
+                          },
+                        )
                       : const Icon(Icons.restaurant),
                 ),
               ),
@@ -388,6 +406,7 @@ class _FoodListScreenState extends State<FoodListScreen> {
                       _cartService.addItem(
                         foodId: food.foodId,
                         foodName: food.name,
+                        foodImage: food.image,
                         price: food.price.toDouble(),
                         storeId: widget.storeId,
                         storeName: widget.storeName,
@@ -451,6 +470,7 @@ class _FoodListScreenState extends State<FoodListScreen> {
               _cartService.addItem(
                 foodId: food.foodId,
                 foodName: food.name,
+                foodImage: food.image,
                 price: food.price.toDouble(),
                 storeId: widget.storeId,
                 storeName: widget.storeName,

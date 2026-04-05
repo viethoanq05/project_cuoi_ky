@@ -1230,6 +1230,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                       cartService.addItem(
                         foodId: food.foodId,
                         foodName: food.name,
+                        foodImage: food.image,
                         price: food.price.toDouble(),
                         storeId: food.storeId,
                         storeName: storeName,
@@ -1310,6 +1311,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               CartService().addItem(
                 foodId: food.foodId,
                 foodName: food.name,
+                foodImage: food.image,
                 price: food.price.toDouble(),
                 storeId: food.storeId,
                 storeName: storeName,

@@ -68,6 +68,7 @@ class CartService extends ChangeNotifier {
   void addItem({
     required String foodId,
     required String foodName,
+    String? foodImage,
     required double price,
     required String storeId,
     required String storeName,
@@ -81,11 +82,14 @@ class CartService extends ChangeNotifier {
     _currentStoreId = storeId;
 
     final key = '${foodId}_${selectedOptions.toString()}';
-    
+
     if (_cartItems.containsKey(key)) {
       // Nếu món đã có trong giỏ, tăng số lượng
       _cartItems[key] = _cartItems[key]!.copyWith(
         quantity: _cartItems[key]!.quantity + quantity,
+        foodImage: (foodImage != null && foodImage.trim().isNotEmpty)
+            ? foodImage.trim()
+            : _cartItems[key]!.foodImage,
       );
     } else {
       // Thêm mới
@@ -93,6 +97,9 @@ class CartService extends ChangeNotifier {
         cartItemId: const Uuid().v4(),
         foodId: foodId,
         foodName: foodName,
+        foodImage: (foodImage != null && foodImage.trim().isNotEmpty)
+            ? foodImage.trim()
+            : null,
         price: price,
         quantity: quantity,
         storeId: storeId,
@@ -133,11 +140,11 @@ class CartService extends ChangeNotifier {
 
     if (key.isNotEmpty) {
       _cartItems.remove(key);
-      
+
       if (_cartItems.isEmpty) {
         _currentStoreId = null;
       }
-      
+
       _saveToPrefs();
       notifyListeners();
     }
@@ -165,13 +172,17 @@ class CartService extends ChangeNotifier {
   // Chuyển đổi giỏ hàng thành Order format
   Map<String, dynamic> toOrderMap() {
     return {
-      'items': _cartItems.values.map((item) => {
-        'foodId': item.foodId,
-        'foodName': item.foodName,
-        'price': item.price,
-        'quantity': item.quantity,
-        'selectedOptions': item.selectedOptions,
-      }).toList(),
+      'items': _cartItems.values
+          .map(
+            (item) => {
+              'foodId': item.foodId,
+              'foodName': item.foodName,
+              'price': item.price,
+              'quantity': item.quantity,
+              'selectedOptions': item.selectedOptions,
+            },
+          )
+          .toList(),
       'storeId': _currentStoreId,
       'totalAmount': total,
     };

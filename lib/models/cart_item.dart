@@ -2,6 +2,7 @@ class CartItem {
   final String cartItemId;
   final String foodId;
   final String foodName;
+  final String? foodImage;
   final double price;
   int quantity;
   final Map<String, String>? selectedOptions;
@@ -12,6 +13,7 @@ class CartItem {
     required this.cartItemId,
     required this.foodId,
     required this.foodName,
+    this.foodImage,
     required this.price,
     required this.quantity,
     required this.storeId,
@@ -26,6 +28,7 @@ class CartItem {
       'cartItemId': cartItemId,
       'foodId': foodId,
       'foodName': foodName,
+      'foodImage': foodImage,
       'price': price,
       'quantity': quantity,
       'selectedOptions': selectedOptions,
@@ -39,6 +42,7 @@ class CartItem {
       cartItemId: map['cartItemId'] as String,
       foodId: map['foodId'] as String,
       foodName: map['foodName'] as String,
+      foodImage: map['foodImage']?.toString(),
       price: (map['price'] as num).toDouble(),
       quantity: map['quantity'] as int,
       storeId: map['storeId'] as String,
@@ -51,6 +55,7 @@ class CartItem {
     String? cartItemId,
     String? foodId,
     String? foodName,
+    String? foodImage,
     double? price,
     int? quantity,
     Map<String, String>? selectedOptions,
@@ -61,6 +66,7 @@ class CartItem {
       cartItemId: cartItemId ?? this.cartItemId,
       foodId: foodId ?? this.foodId,
       foodName: foodName ?? this.foodName,
+      foodImage: foodImage ?? this.foodImage,
       price: price ?? this.price,
       quantity: quantity ?? this.quantity,
       storeId: storeId ?? this.storeId,

@@ -272,7 +272,7 @@ class _SearchFilterScreenState extends State<SearchFilterScreen>
                 max: 200000,
                 divisions: 40,
                 activeColor: Colors.green,
-                inactiveColor: Colors.green.withValues(alpha: 51),
+                inactiveColor: Colors.green.withAlpha(51),
                 labels: RangeLabels(
                   '${_minPrice.toStringAsFixed(0)}đ',
                   '${_maxPrice.toStringAsFixed(0)}đ',
@@ -299,7 +299,7 @@ class _SearchFilterScreenState extends State<SearchFilterScreen>
                             _maxPrice = price.toDouble();
                           });
                         },
-                        backgroundColor: Colors.green.withValues(alpha: 26),
+                        backgroundColor: Colors.green.withAlpha(26),
                         labelStyle: const TextStyle(
                           fontSize: 11,
                           color: Colors.green,
@@ -344,8 +344,15 @@ class _SearchFilterScreenState extends State<SearchFilterScreen>
 
               var foods = snapshot.data ?? [];
 
-              // Lọc thêm theo rating
-              foods = foods.where((f) => f.avgRating >= _minRating).toList();
+              // Always apply filters (even while searching).
+              foods = foods
+                  .where(
+                    (f) =>
+                        f.price >= _minPrice &&
+                        f.price <= _maxPrice &&
+                        f.avgRating >= _minRating,
+                  )
+                  .toList();
 
               if (foods.isEmpty) {
                 return Center(
@@ -407,7 +414,25 @@ class _SearchFilterScreenState extends State<SearchFilterScreen>
                   height: 120,
                   color: Colors.grey[300],
                   child: food.image.isNotEmpty
-                      ? Image.network(food.image, fit: BoxFit.cover)
+                      ? LayoutBuilder(
+                          builder: (context, constraints) {
+                            final dpr = MediaQuery.devicePixelRatioOf(context);
+                            final cacheWidth = (constraints.maxWidth * dpr)
+                                .round();
+                            final cacheHeight = (120 * dpr).round();
+
+                            return Image.network(
+                              food.image,
+                              fit: BoxFit.cover,
+                              filterQuality: FilterQuality.medium,
+                              isAntiAlias: true,
+                              cacheWidth: cacheWidth > 0 ? cacheWidth : null,
+                              cacheHeight: cacheHeight > 0 ? cacheHeight : null,
+                              errorBuilder: (_, _, _) =>
+                                  const Center(child: Icon(Icons.broken_image)),
+                            );
+                          },
+                        )
                       : const Icon(Icons.restaurant),
                 ),
               ),
@@ -569,6 +594,7 @@ class _SearchFilterScreenState extends State<SearchFilterScreen>
                       cartService.addItem(
                         foodId: food.foodId,
                         foodName: food.name,
+                        foodImage: food.image,
                         price: food.price.toDouble(),
                         storeId: food.storeId,
                         storeName: storeName,
@@ -642,6 +668,7 @@ class _SearchFilterScreenState extends State<SearchFilterScreen>
               CartService().addItem(
                 foodId: food.foodId,
                 foodName: food.name,
+                foodImage: food.image,
                 price: food.price.toDouble(),
                 storeId: food.storeId,
                 storeName: storeName,

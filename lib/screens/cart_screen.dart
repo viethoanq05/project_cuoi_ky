@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/cart_service.dart';
+import '../services/menu_service.dart';
 import '../theme/app_colors.dart';
 import 'booking_screen.dart';
 
@@ -22,10 +23,7 @@ class _CartScreenState extends State<CartScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Giỏ hàng'),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text('Giỏ hàng'), elevation: 0),
       body: ListenableBuilder(
         listenable: _cartService,
         builder: (context, _) {
@@ -79,7 +77,42 @@ class _CartScreenState extends State<CartScreen> {
                                   color: Colors.grey[300],
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: const Icon(Icons.restaurant),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Builder(
+                                    builder: (context) {
+                                      final imageUrl =
+                                          MenuService.getPublicImageUrl(
+                                            (item.foodImage ?? '').trim(),
+                                          );
+
+                                      if (imageUrl.isEmpty) {
+                                        return const Icon(Icons.restaurant);
+                                      }
+
+                                      return Image.network(
+                                        imageUrl,
+                                        fit: BoxFit.cover,
+                                        filterQuality: FilterQuality.medium,
+                                        isAntiAlias: true,
+                                        cacheWidth:
+                                            (80 *
+                                                    MediaQuery.devicePixelRatioOf(
+                                                      context,
+                                                    ))
+                                                .round(),
+                                        cacheHeight:
+                                            (80 *
+                                                    MediaQuery.devicePixelRatioOf(
+                                                      context,
+                                                    ))
+                                                .round(),
+                                        errorBuilder: (_, _, _) =>
+                                            const Icon(Icons.restaurant),
+                                      );
+                                    },
+                                  ),
+                                ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -150,7 +183,9 @@ class _CartScreenState extends State<CartScreen> {
                                   IconButton(
                                     onPressed: () {
                                       _cartService.removeItem(item.cartItemId);
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         const SnackBar(
                                           content: Text('Đã xóa khỏi giỏ hàng'),
                                           duration: Duration(seconds: 2),
@@ -184,19 +219,14 @@ class _CartScreenState extends State<CartScreen> {
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  border: Border(
-                    top: BorderSide(color: Colors.grey[200]!),
-                  ),
+                  border: Border(top: BorderSide(color: Colors.grey[200]!)),
                 ),
                 child: Column(
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'Tạm tính:',
-                          style: TextStyle(fontSize: 14),
-                        ),
+                        const Text('Tạm tính:', style: TextStyle(fontSize: 14)),
                         Text(
                           '${_cartService.subtotal.toStringAsFixed(0)}đ',
                           style: const TextStyle(
