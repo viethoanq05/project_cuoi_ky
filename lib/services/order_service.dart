@@ -191,21 +191,14 @@ class OrderService extends ChangeNotifier {
   }) async {
     final now = FieldValue.serverTimestamp();
 
-    final data = <String, dynamic>{
-      'status': newStatus,
-      'order_status': newStatus,
-      'updatedAt': now,
-      'updated_at': now,
-    };
+    final data = <String, dynamic>{'status': newStatus, 'updatedAt': now};
 
     if (driverId != null) {
       data['driverId'] = driverId;
-      data['driver_id'] = driverId;
     }
 
     if (proofImage != null) {
       data['proofImage'] = proofImage;
-      data['proof_image'] = proofImage;
     }
 
     await _updateOrderAndMirrors(orderId, data);
@@ -221,7 +214,6 @@ class OrderService extends ChangeNotifier {
       'rating': rating,
       'review': review,
       'updatedAt': FieldValue.serverTimestamp(),
-      'updated_at': FieldValue.serverTimestamp(),
     };
 
     await _updateOrderAndMirrors(orderId, data);
@@ -251,12 +243,9 @@ class OrderService extends ChangeNotifier {
   Future<void> driverCancelOrder(String orderId) async {
     final data = {
       'status': 'pending',
-      'order_status': 'pending',
       'driverId': '',
-      'driver_id': '',
       'driver_name': '',
       'updatedAt': FieldValue.serverTimestamp(),
-      'updated_at': FieldValue.serverTimestamp(),
     };
 
     await _updateOrderAndMirrors(orderId, data);

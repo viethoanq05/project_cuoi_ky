@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../../../domain/entities/order_entity.dart';
 
 class OrderModel {
@@ -30,29 +32,88 @@ class OrderModel {
   });
 
   factory OrderModel.fromJson(Map<String, dynamic> json) {
-    return OrderModel(
-      id: json['id'] as String? ?? '',
-      userId: json['user_id'] as String? ?? '',
-      storeId: json['store_id'] as String? ?? '',
-      driverId: json['driver_id'] as String?,
-      items: (json['items'] as List<dynamic>?)
-              ?.map((item) => OrderItemModel.fromJson(item as Map<String, dynamic>))
-              .toList() ??
-          [],
-      totalPrice: (json['total_price'] as num?)?.toDouble() ?? 0.0,
-      status: json['status'] as String? ?? 'pending',
-      paymentMethod: json['payment_method'] as String? ?? 'cod',
-      createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
-          : DateTime.now(),
-      updatedAt: json['updated_at'] != null
-          ? DateTime.parse(json['updated_at'] as String)
-          : null,
-      scheduledTime: json['scheduled_time'] != null
-          ? DateTime.parse(json['scheduled_time'] as String)
-          : null,
-      deliveryAddress: json['delivery_address'] as String?,
+    final createdAt =
+        _asDateTime(
+          json['created_at'] ?? json['createdAt'] ?? json['order_time'],
+        ) ??
+        DateTime.now();
+    final updatedAt = _asDateTime(json['updated_at'] ?? json['updatedAt']);
+    final scheduledTime = _asDateTime(
+      json['scheduled_time'] ?? json['scheduledTime'],
     );
+
+    final rawItems = (json['items'] is List)
+        ? (json['items'] as List)
+        : ((json['order_items'] is List)
+              ? (json['order_items'] as List)
+              : const []);
+
+    final items = rawItems
+        .whereType<Map>()
+        .map((item) => OrderItemModel.fromJson(Map<String, dynamic>.from(item)))
+        .toList();
+
+    final totalFromField =
+        (json['total_price'] as num?)?.toDouble() ??
+        (json['totalAmount'] as num?)?.toDouble() ??
+        (json['total_amount'] as num?)?.toDouble() ??
+        (json['totalPrice'] as num?)?.toDouble() ??
+        0.0;
+    final computedTotal = items.fold<double>(
+      0.0,
+      (sum, item) => sum + item.subtotal,
+    );
+
+    return OrderModel(
+      id: (json['id'] ?? json['orderId'] ?? json['order_id'] ?? '').toString(),
+      userId:
+          (json['user_id'] ??
+                  json['customerId'] ??
+                  json['customer_id'] ??
+                  json['userId'] ??
+                  '')
+              .toString(),
+      storeId: (json['store_id'] ?? json['storeId'] ?? '').toString(),
+      driverId: (json['driver_id'] ?? json['driverId'])?.toString(),
+      items: items,
+      totalPrice: totalFromField > 0 ? totalFromField : computedTotal,
+      status: (json['status'] ?? json['order_status'] ?? 'pending').toString(),
+      paymentMethod: (json['payment_method'] ?? json['paymentMethod'] ?? 'cod')
+          .toString(),
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      scheduledTime: scheduledTime,
+      deliveryAddress: (json['delivery_address'] ?? json['deliveryAddress'])
+          ?.toString(),
+    );
+  }
+
+  static DateTime? _asDateTime(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is Timestamp) return value.toDate();
+
+    if (value is int) {
+      // Common pattern: millisecondsSinceEpoch.
+      return DateTime.fromMillisecondsSinceEpoch(value);
+    }
+
+    final text = value.toString().trim();
+    if (text.isEmpty) return null;
+
+    // ISO-8601 strings.
+    final parsed = DateTime.tryParse(text);
+    if (parsed != null) return parsed;
+
+    // Fallback: numeric string epoch.
+    final epoch = int.tryParse(text);
+    if (epoch == null) return null;
+
+    // Heuristic: treat 10-digit as seconds, 13-digit as millis.
+    if (text.length == 10) {
+      return DateTime.fromMillisecondsSinceEpoch(epoch * 1000);
+    }
+    return DateTime.fromMillisecondsSinceEpoch(epoch);
   }
 
   Map<String, dynamic> toJson() {
@@ -136,12 +197,26 @@ class OrderItemModel {
   });
 
   factory OrderItemModel.fromJson(Map<String, dynamic> json) {
+    final qty =
+        (json['quantity'] as num?)?.toInt() ??
+        int.tryParse(json['quantity']?.toString() ?? '') ??
+        1;
+    final price =
+        (json['price'] as num?)?.toDouble() ??
+        double.tryParse(json['price']?.toString() ?? '') ??
+        0.0;
+    final subtotal =
+        (json['subtotal'] as num?)?.toDouble() ??
+        double.tryParse(json['subtotal']?.toString() ?? '') ??
+        (price * qty);
+
     return OrderItemModel(
-      foodId: json['food_id'] as String? ?? '',
-      foodName: json['food_name'] as String? ?? '',
-      quantity: json['quantity'] as int? ?? 1,
-      price: (json['price'] as num?)?.toDouble() ?? 0.0,
-      subtotal: (json['subtotal'] as num?)?.toDouble() ?? 0.0,
+      foodId: (json['food_id'] ?? json['foodId'] ?? '').toString(),
+      foodName: (json['food_name'] ?? json['foodName'] ?? json['name'] ?? '')
+          .toString(),
+      quantity: qty,
+      price: price,
+      subtotal: subtotal,
     );
   }
 

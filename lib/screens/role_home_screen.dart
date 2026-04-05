@@ -1041,20 +1041,20 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
           throw Exception('Don hang da duoc cap nhat boi nguoi khac.');
         }
 
-        final existingDriverId = (order['driver_id'] ?? '').toString().trim();
+        final existingDriverId = (order['driverId'] ?? order['driver_id'] ?? '')
+            .toString()
+            .trim();
         if (existingDriverId.isNotEmpty) {
           throw Exception('Don hang da co tai xe nhan.');
         }
 
         final nextStatus = _acceptedOrderStatus(existingStatus);
         final updateData = <String, dynamic>{
-          _orderStatusField: nextStatus,
           'status': nextStatus,
-          'driver_id': driverUid,
-          'driver_name': driverName,
-          'accepted_at': FieldValue.serverTimestamp(),
-          'updated_at': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
+          'driverId': driverUid,
+          'driverName': driverName,
+          'acceptedAt': FieldValue.serverTimestamp(),
         };
 
         tx.update(orderRef, updateData);

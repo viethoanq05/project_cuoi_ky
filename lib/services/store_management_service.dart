@@ -129,13 +129,7 @@ class StoreManagementService {
     required String ticketId,
     required StoreTicketStatus status,
   }) async {
-    final updateData = <String, dynamic>{
-      'status': status.value,
-      'order_status': status.value,
-      'updated_at': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-      'store_id': currentStoreId,
-    };
+    final updateData = <String, dynamic>{'status': status.value};
 
     await _firestore
         .collection(_ordersCollection)

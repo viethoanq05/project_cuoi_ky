@@ -60,6 +60,9 @@ class StoreInfo {
   }
 
   factory StoreInfo.fromMap(Map<String, dynamic> map) {
+    final rawImage = map['storeImage'] ?? map['image_url'] ?? map['imageUrl'];
+    final normalizedImage = rawImage?.toString().trim();
+
     return StoreInfo(
       storeId: map['storeId'] as String,
       storeOwnerId: map['storeOwnerId'] as String,
@@ -68,7 +71,9 @@ class StoreInfo {
       longitude: (map['longitude'] as num).toDouble(),
       address: map['address'] as String,
       phone: map['phone'] as String,
-      storeImage: map['storeImage'] as String?,
+      storeImage: (normalizedImage != null && normalizedImage.isNotEmpty)
+          ? normalizedImage
+          : null,
       rating: (map['rating'] as num?)?.toDouble(),
       totalRatings: map['totalRatings'] as int?,
       isOpen: map['isOpen'] as bool? ?? true,
@@ -104,7 +109,8 @@ class StoreInfo {
       distance: distance ?? this.distance,
       weatherCondition: weatherCondition ?? this.weatherCondition,
       deliveryFee: deliveryFee ?? this.deliveryFee,
-      estimatedDeliveryTime: estimatedDeliveryTime ?? this.estimatedDeliveryTime,
+      estimatedDeliveryTime:
+          estimatedDeliveryTime ?? this.estimatedDeliveryTime,
     );
   }
 }

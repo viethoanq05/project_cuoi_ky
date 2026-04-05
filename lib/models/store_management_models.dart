@@ -31,6 +31,9 @@ class StoreTicketStatus {
     if (normalized == 'on_the_way') {
       return delivering;
     }
+    if (normalized == 'preparing' || normalized == 'dang_chuan_bi') {
+      return preparing;
+    }
     if (normalized == 'searching' || normalized == 'dang_tim_xe') {
       return findingDriver;
     }
@@ -69,6 +72,7 @@ class StoreTicket {
       totalAmount: asDouble(
         map['total_amount'] ??
             map['totalAmount'] ??
+            map['total_price'] ??
             map['total'] ??
             map['amount'] ??
             map['price'],

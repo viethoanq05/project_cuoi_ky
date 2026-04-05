@@ -233,7 +233,7 @@ class _SearchFilterScreenState extends State<SearchFilterScreen>
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
-                                    store.rating?.toStringAsFixed(1) ?? 'N/A',
+                                    (store.rating ?? 0).toStringAsFixed(1),
                                     style: const TextStyle(fontSize: 12),
                                   ),
                                 ],

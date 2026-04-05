@@ -43,12 +43,13 @@ class SearchService {
           storeId: doc.id,
           storeOwnerId: doc.id,
           storeName: data['fullName'] ?? data['storeName'] ?? '',
+          storeImage: _extractStoreImageUrl(data),
           latitude: _parseLat(data['position']),
           longitude: _parseLon(data['position']),
           address: data['address'] ?? '',
           phone: data['phone'] ?? '',
-          rating: (data['avgRating'] as num?)?.toDouble(),
-          totalRatings: data['totalRatings'] as int?,
+          rating: _extractStoreRating(data),
+          totalRatings: _extractTotalRatings(data),
           isOpen: data['isStoreOpen'] ?? true,
         );
       }).toList();
@@ -82,12 +83,13 @@ class SearchService {
               storeId: doc.id,
               storeOwnerId: doc.id,
               storeName: data['fullName'] ?? '',
+              storeImage: _extractStoreImageUrl(data),
               latitude: _parseLat(data['position']),
               longitude: _parseLon(data['position']),
               address: data['address'] ?? '',
               phone: data['phone'] ?? '',
-              rating: (data['avgRating'] as num?)?.toDouble(),
-              totalRatings: data['totalRatings'] as int?,
+              rating: _extractStoreRating(data),
+              totalRatings: _extractTotalRatings(data),
               isOpen: data['isStoreOpen'] ?? true,
             );
           })
@@ -326,5 +328,83 @@ class SearchService {
       if (match != null) return double.tryParse(match.group(1)!) ?? 0.0;
     }
     return 0.0;
+  }
+
+  String _asTrimmedText(dynamic value) {
+    if (value == null) return '';
+    return value.toString().trim();
+  }
+
+  double _asDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString().trim()) ?? 0.0;
+  }
+
+  int _asInt(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString().trim()) ?? 0;
+  }
+
+  Map<String, dynamic> _extractStoreInfoMap(Map<String, dynamic> data) {
+    final info = data['storeInfo'] ?? data['store_info'];
+    if (info is List && info.isNotEmpty && info.first is Map) {
+      return Map<String, dynamic>.from(info.first as Map);
+    }
+    if (info is Map) {
+      return Map<String, dynamic>.from(info);
+    }
+    return const <String, dynamic>{};
+  }
+
+  double _extractStoreRating(Map<String, dynamic> data) {
+    final rootCandidate =
+        data['avgRating'] ??
+        data['avg_rating'] ??
+        data['rating'] ??
+        data['stars'] ??
+        data['storeRating'];
+    final rootRating = _asDouble(rootCandidate);
+    if (rootRating > 0) return rootRating;
+
+    final storeInfo = _extractStoreInfoMap(data);
+    final nestedCandidate =
+        storeInfo['avgRating'] ??
+        storeInfo['avg_rating'] ??
+        storeInfo['rating'] ??
+        storeInfo['stars'];
+    final nestedRating = _asDouble(nestedCandidate);
+    return nestedRating;
+  }
+
+  int _extractTotalRatings(Map<String, dynamic> data) {
+    final rootCandidate =
+        data['totalRatings'] ?? data['total_ratings'] ?? data['ratingCount'];
+    final rootCount = _asInt(rootCandidate);
+    if (rootCount > 0) return rootCount;
+
+    final storeInfo = _extractStoreInfoMap(data);
+    final nestedCandidate =
+        storeInfo['totalRatings'] ??
+        storeInfo['total_ratings'] ??
+        storeInfo['ratingCount'];
+    return _asInt(nestedCandidate);
+  }
+
+  String _extractStoreImageUrl(Map<String, dynamic> data) {
+    final rootImage = _asTrimmedText(
+      data['image_url'] ?? data['imageUrl'] ?? data['storeImage'],
+    );
+    if (rootImage.isNotEmpty) return rootImage;
+
+    final info = data['storeInfo'] ?? data['store_info'];
+    if (info is Map) {
+      return _asTrimmedText(
+        info['image_url'] ?? info['imageUrl'] ?? info['storeImage'],
+      );
+    }
+    return '';
   }
 }

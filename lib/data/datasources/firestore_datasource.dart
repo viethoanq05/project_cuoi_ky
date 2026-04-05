@@ -22,6 +22,7 @@ class FirestoreDatasource {
     DateTime? scheduledTime,
   }) async {
     try {
+      final now = DateTime.now();
       final orderData = {
         'id': orderId,
         'user_id': userId,
@@ -29,13 +30,11 @@ class FirestoreDatasource {
         'items': items,
         'total_price': totalPrice,
         'status': 'pending',
-        'order_status': 'pending',
         'payment_method': paymentMethod,
         'delivery_address': deliveryAddress,
-        'scheduled_time': scheduledTime?.toIso8601String(),
-        'created_at': DateTime.now().toIso8601String(),
-        'updated_at': DateTime.now().toIso8601String(),
-        'updatedAt': DateTime.now().toIso8601String(),
+        'scheduled_time': scheduledTime,
+        'created_at': now,
+        'updated_at': now,
       };
 
       await _firebaseFirestore.collection('Orders').doc(orderId).set(orderData);
@@ -84,7 +83,9 @@ class FirestoreDatasource {
     return _firebaseFirestore.collection('Orders').doc(orderId).snapshots().map(
       (snapshot) {
         if (snapshot.exists && snapshot.data() != null) {
-          return OrderModel.fromJson(snapshot.data()!);
+          final data = <String, dynamic>{...snapshot.data()!};
+          data.putIfAbsent('id', () => snapshot.id);
+          return OrderModel.fromJson(data);
         }
         return null;
       },
@@ -104,7 +105,9 @@ class FirestoreDatasource {
           .doc(orderId)
           .get();
       if (doc.exists && doc.data() != null) {
-        return OrderModel.fromJson(doc.data()!);
+        final data = <String, dynamic>{...doc.data()!};
+        data.putIfAbsent('id', () => doc.id);
+        return OrderModel.fromJson(data);
       }
       return null;
     } catch (e) {
@@ -114,12 +117,9 @@ class FirestoreDatasource {
 
   Future<void> updateOrderStatus(String orderId, String newStatus) async {
     try {
-      final now = DateTime.now().toIso8601String();
       final updateData = {
         'status': newStatus,
-        'order_status': newStatus,
-        'updated_at': now,
-        'updatedAt': now,
+        'updated_at': FieldValue.serverTimestamp(),
       };
 
       final orderRef = _firebaseFirestore.collection('Orders').doc(orderId);
@@ -134,13 +134,18 @@ class FirestoreDatasource {
 
       final userId = (order['user_id'] ?? order['customer_id'] ?? '')
           .toString();
-      final storeId = (order['store_id'] ?? '').toString();
+      final storeId = (order['store_id'] ?? order['storeId'] ?? '').toString();
 
-      if (userId.trim().isNotEmpty) {
+      final fallbackCustomerId = (order['customerId'] ?? '').toString();
+      final resolvedUserId = userId.trim().isNotEmpty
+          ? userId.trim()
+          : fallbackCustomerId.trim();
+
+      if (resolvedUserId.isNotEmpty) {
         try {
           await _firebaseFirestore
               .collection('Users')
-              .doc(userId)
+              .doc(resolvedUserId)
               .collection('Orders')
               .doc(orderId)
               .set(updateData, SetOptions(merge: true));
@@ -341,7 +346,7 @@ class FirestoreDatasource {
     DateTime? scheduledTime,
   }) async {
     try {
-      final now = DateTime.now().toIso8601String();
+      final now = DateTime.now();
 
       await _firebaseFirestore.runTransaction((transaction) async {
         final userRef = _firebaseFirestore.collection('Users').doc(userId);
@@ -373,13 +378,11 @@ class FirestoreDatasource {
           'items': items,
           'total_price': totalPrice,
           'status': 'pending',
-          'order_status': 'pending',
           'payment_method': 'wallet',
           'delivery_address': deliveryAddress,
-          'scheduled_time': scheduledTime?.toIso8601String(),
+          'scheduled_time': scheduledTime,
           'created_at': now,
           'updated_at': now,
-          'updatedAt': now,
         };
 
         transaction.set(orderRef, orderData);

@@ -48,45 +48,28 @@ class OrderData {
 
   Map<String, dynamic> toMap() {
     return {
+      // Canonical fields (avoid writing duplicates).
+      // NOTE: orderId is still stored for convenience, though doc.id is the source of truth.
       'orderId': orderId,
-      'order_id': orderId,
       'customerId': customerId,
-      'customer_id': customerId,
-      'user_id': customerId,
       'storeId': storeId,
-      'store_id': storeId,
       'storeName': storeName,
-      'store_name': storeName,
       'items': items,
-      'order_items': items,
       'totalAmount': totalAmount,
-      'total_amount': totalAmount,
       'deliveryFee': deliveryFee,
-      'shipping_fee': deliveryFee,
       'paymentMethod': paymentMethod,
-      'payment_method': paymentMethod,
       'status': status,
-      'order_status': status,
       'scheduledTime': scheduledTime,
-      'scheduled_time': scheduledTime,
       'createdAt': createdAt,
-      'created_at': createdAt,
-      'order_time': createdAt,
       'updatedAt': updatedAt,
-      'updated_at': updatedAt,
       'deliveryAddress': deliveryAddress,
-      'delivery_address': deliveryAddress,
       'deliveryLat': deliveryLat,
-      'delivery_lat': deliveryLat,
       'deliveryLng': deliveryLng,
-      'delivery_lng': deliveryLng,
       'driverId': driverId,
-      'driver_id': driverId,
       'notes': notes,
       'rating': rating,
       'review': review,
       'proofImage': proofImage,
-      'proof_image': proofImage,
     };
   }
 
@@ -123,7 +106,13 @@ class OrderData {
                 ? List<Map<String, dynamic>>.from(map['order_items'])
                 : const <Map<String, dynamic>>[]),
       totalAmount:
-          _asDouble(map['totalAmount'] ?? map['total_amount'] ?? 0) ?? 0,
+          _asDouble(
+            map['totalAmount'] ??
+                map['total_amount'] ??
+                map['total_price'] ??
+                0,
+          ) ??
+          0,
       deliveryFee:
           _asDouble(map['deliveryFee'] ?? map['shipping_fee'] ?? 0) ?? 0,
       paymentMethod: (map['paymentMethod'] ?? map['payment_method'] ?? 'cod')

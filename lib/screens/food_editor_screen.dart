@@ -23,6 +23,7 @@ class _FoodEditorScreenState extends State<FoodEditorScreen> {
   bool _isAvailable = true;
   String _size = 'M';
   String? _selectedCategoryId;
+  String? _selectedCategoryName;
   String _imageUrl = '';
   bool _uploadingImage = false;
   bool _saving = false;
@@ -48,6 +49,61 @@ class _FoodEditorScreenState extends State<FoodEditorScreen> {
     final initialSize = (initial?.options['size']?.toString() ?? 'M')
         .toUpperCase();
     _size = ['S', 'M', 'L'].contains(initialSize) ? initialSize : 'M';
+  }
+
+  bool get _isDrinkCategory {
+    return _looksLikeDrink(_selectedCategoryName) ||
+        _looksLikeDrink(_selectedCategoryId);
+  }
+
+  bool _looksLikeDrink(String? value) {
+    final raw = (value ?? '').trim().toLowerCase();
+    if (raw.isEmpty) {
+      return false;
+    }
+
+    // Best-effort matching for common “drink” labels.
+    final normalized = raw
+        .replaceAll('đ', 'd')
+        .replaceAll('ồ', 'o')
+        .replaceAll('ố', 'o')
+        .replaceAll('ộ', 'o')
+        .replaceAll('ơ', 'o')
+        .replaceAll('ớ', 'o')
+        .replaceAll('ở', 'o')
+        .replaceAll('ợ', 'o')
+        .replaceAll('ọ', 'o')
+        .replaceAll('û', 'u')
+        .replaceAll('ư', 'u')
+        .replaceAll('ứ', 'u')
+        .replaceAll('ừ', 'u')
+        .replaceAll('ự', 'u')
+        .replaceAll('ủ', 'u')
+        .replaceAll('ụ', 'u')
+        .replaceAll('á', 'a')
+        .replaceAll('à', 'a')
+        .replaceAll('ả', 'a')
+        .replaceAll('ã', 'a')
+        .replaceAll('ạ', 'a')
+        .replaceAll('ă', 'a')
+        .replaceAll('â', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('è', 'e')
+        .replaceAll('ẻ', 'e')
+        .replaceAll('ẽ', 'e')
+        .replaceAll('ẹ', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ì', 'i')
+        .replaceAll('ỉ', 'i')
+        .replaceAll('ĩ', 'i')
+        .replaceAll('ị', 'i');
+
+    return normalized.contains('do uong') ||
+        normalized.contains('douong') ||
+        normalized.contains('do_uong') ||
+        normalized.contains('drink') ||
+        normalized.contains('beverage') ||
+        normalized.contains('nuoc');
   }
 
   @override
@@ -138,13 +194,20 @@ class _FoodEditorScreenState extends State<FoodEditorScreen> {
 
     String? error;
     try {
+      final options = <String, dynamic>{...?widget.initial?.options};
+      if (_isDrinkCategory) {
+        options['size'] = _size;
+      } else {
+        options.remove('size');
+      }
+
       final payload = _EditorPayload(
         name: _nameController.text.trim(),
         description: _descriptionController.text.trim(),
         categoryId: _selectedCategoryId!.trim(),
         image: _imageUrl.trim(),
         price: num.tryParse(_priceController.text.trim()) ?? 0,
-        options: <String, dynamic>{'size': _size},
+        options: options,
         isAvailable: _isAvailable,
       );
 
@@ -199,6 +262,7 @@ class _FoodEditorScreenState extends State<FoodEditorScreen> {
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.initial != null;
+    final showSize = _isDrinkCategory;
 
     return Scaffold(
       appBar: AppBar(title: Text(isEdit ? 'Chinh sua mon an' : 'Them mon an')),
@@ -246,6 +310,29 @@ class _FoodEditorScreenState extends State<FoodEditorScreen> {
                           ? _selectedCategoryId
                           : null;
 
+                      MenuCategory? selectedCategory;
+                      if (selected != null) {
+                        for (final c in items) {
+                          if (c.id == selected) {
+                            selectedCategory = c;
+                            break;
+                          }
+                        }
+                      }
+
+                      if (_selectedCategoryName == null &&
+                          selectedCategory != null) {
+                        final selectedName = selectedCategory.name;
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (!mounted) {
+                            return;
+                          }
+                          setState(() {
+                            _selectedCategoryName = selectedName;
+                          });
+                        });
+                      }
+
                       return DropdownButtonFormField<String>(
                         initialValue: selected,
                         decoration: const InputDecoration(
@@ -260,8 +347,16 @@ class _FoodEditorScreenState extends State<FoodEditorScreen> {
                             )
                             .toList(),
                         onChanged: (value) {
+                          MenuCategory? picked;
+                          for (final c in items) {
+                            if (c.id == value) {
+                              picked = c;
+                              break;
+                            }
+                          }
                           setState(() {
                             _selectedCategoryId = value;
+                            _selectedCategoryName = picked?.name;
                           });
                         },
                         validator: (_) {
@@ -289,45 +384,47 @@ class _FoodEditorScreenState extends State<FoodEditorScreen> {
                       return null;
                     },
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Kich thuoc (size)',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  RadioGroup<String>(
-                    groupValue: _size,
-                    onChanged: (value) {
-                      setState(() {
-                        _size = value!;
-                      });
-                    },
-                    child: const Row(
-                      children: [
-                        Expanded(
-                          child: RadioListTile<String>(
-                            value: 'S',
-                            title: Text('S'),
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                        ),
-                        Expanded(
-                          child: RadioListTile<String>(
-                            value: 'M',
-                            title: Text('M'),
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                        ),
-                        Expanded(
-                          child: RadioListTile<String>(
-                            value: 'L',
-                            title: Text('L'),
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                        ),
-                      ],
+                  if (showSize) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'Kich thuoc (size)',
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
-                  ),
-                  const SizedBox(height: 8),
+                    RadioGroup<String>(
+                      groupValue: _size,
+                      onChanged: (value) {
+                        setState(() {
+                          _size = value!;
+                        });
+                      },
+                      child: const Row(
+                        children: [
+                          Expanded(
+                            child: RadioListTile<String>(
+                              value: 'S',
+                              title: Text('S'),
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                          Expanded(
+                            child: RadioListTile<String>(
+                              value: 'M',
+                              title: Text('M'),
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                          Expanded(
+                            child: RadioListTile<String>(
+                              value: 'L',
+                              title: Text('L'),
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   SwitchListTile(
                     value: _isAvailable,
                     onChanged: (value) {

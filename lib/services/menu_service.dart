@@ -243,9 +243,30 @@ class MenuService {
   }
 
   Map<String, dynamic> _sanitizeOptions(Map<String, dynamic> source) {
-    final rawSize = (source['size']?.toString() ?? 'M').toUpperCase();
-    final size = ['S', 'M', 'L'].contains(rawSize) ? rawSize : 'M';
-    return <String, dynamic>{'size': size};
+    final sanitized = <String, dynamic>{};
+
+    for (final entry in source.entries) {
+      final key = entry.key.toString();
+      sanitized[key] = entry.value;
+    }
+
+    if (!sanitized.containsKey('size')) {
+      return sanitized;
+    }
+
+    final rawSize = (sanitized['size']?.toString() ?? '').trim().toUpperCase();
+    if (rawSize.isEmpty) {
+      sanitized.remove('size');
+      return sanitized;
+    }
+
+    if (!['S', 'M', 'L'].contains(rawSize)) {
+      sanitized.remove('size');
+      return sanitized;
+    }
+
+    sanitized['size'] = rawSize;
+    return sanitized;
   }
 
   String _errorMessage(FirebaseException e) {

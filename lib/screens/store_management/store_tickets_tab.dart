@@ -162,27 +162,21 @@ class _StoreTicketsTabState extends State<StoreTicketsTab> {
                             'Tổng tiền: ${formatStoreCurrency(ticket.totalAmount)}',
                           ),
                           const SizedBox(height: 10),
-                          DropdownButtonFormField<StoreTicketStatus>(
-                            initialValue: ticket.status,
-                            decoration: const InputDecoration(
-                              labelText: 'Cập nhật trạng thái đơn',
+                          if (ticket.status == StoreTicketStatus.pending) ...[
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton.icon(
+                                onPressed: isSaving
+                                    ? null
+                                    : () => _acceptTicket(ticket.id),
+                                icon: const Icon(Icons.check_circle_outline),
+                                label: Text(
+                                  isSaving ? 'Đang nhận...' : 'Nhận đơn',
+                                ),
+                              ),
                             ),
-                            items: StoreTicketStatus.values.map((status) {
-                              return DropdownMenuItem<StoreTicketStatus>(
-                                value: status,
-                                child: Text(status.label),
-                              );
-                            }).toList(),
-                            onChanged: isSaving
-                                ? null
-                                : (newStatus) {
-                                    if (newStatus == null ||
-                                        newStatus == ticket.status) {
-                                      return;
-                                    }
-                                    _updateStatus(ticket.id, newStatus);
-                                  },
-                          ),
+                            const SizedBox(height: 12),
+                          ],
                         ],
                       ),
                     ),
@@ -196,7 +190,7 @@ class _StoreTicketsTabState extends State<StoreTicketsTab> {
     );
   }
 
-  Future<void> _updateStatus(String ticketId, StoreTicketStatus status) async {
+  Future<void> _acceptTicket(String ticketId) async {
     setState(() {
       _updatingTicketIds.add(ticketId);
     });
@@ -204,13 +198,14 @@ class _StoreTicketsTabState extends State<StoreTicketsTab> {
     try {
       await context.read<StoreManagementService>().updateTicketStatus(
         ticketId: ticketId,
-        status: status,
+        status: StoreTicketStatus.findingDriver,
       );
+
       if (!mounted) {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đã cập nhật trạng thái đơn hàng.')),
+        const SnackBar(content: Text('Đã nhận đơn. Đang tìm tài xế...')),
       );
     } catch (e) {
       if (!mounted) {
@@ -218,7 +213,7 @@ class _StoreTicketsTabState extends State<StoreTicketsTab> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Cập nhật thất bại: $e')));
+      ).showSnackBar(SnackBar(content: Text('Nhận đơn thất bại: $e')));
     } finally {
       if (mounted) {
         setState(() {

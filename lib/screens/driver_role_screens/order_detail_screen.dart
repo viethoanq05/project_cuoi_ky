@@ -75,9 +75,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   void _confirmAcceptOrder(BuildContext context, DriverController controller) {
+    final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
+    final navigator = Navigator.of(context);
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: const Text(
           'Nhận đơn hàng',
@@ -104,28 +106,28 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Hủy'),
           ),
           FilledButton(
             onPressed: () async {
-              Navigator.pop(context); // Đóng dialog
+              Navigator.of(dialogContext).pop(); // Đóng dialog
               final error = await controller.acceptOrder(widget.order.orderId);
-              if (mounted) {
-                if (error != null) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text('Lỗi: $error')));
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Nhận đơn thành công!'),
-                      backgroundColor: AppColors.success,
-                    ),
-                  );
-                  Navigator.pop(context); // Quay lại dashboard
-                }
+              if (!mounted) return;
+
+              if (error != null) {
+                (scaffoldMessenger ?? ScaffoldMessenger.of(context))
+                    .showSnackBar(SnackBar(content: Text('Lỗi: $error')));
+                return;
               }
+
+              (scaffoldMessenger ?? ScaffoldMessenger.of(context)).showSnackBar(
+                const SnackBar(
+                  content: Text('Nhận đơn thành công!'),
+                  backgroundColor: AppColors.success,
+                ),
+              );
+              navigator.pop(); // Quay lại dashboard
             },
             child: const Text('Xác nhận'),
           ),
@@ -138,7 +140,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isPending = [
-      'pending',
       'finding_driver',
       'searching',
       'dang_tim_xe',

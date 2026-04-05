@@ -275,9 +275,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           padding: EdgeInsets.zero,
           children: [
             DrawerHeader(
-              decoration: BoxDecoration(
-                color: Theme.of(context).primaryColor,
-              ),
+              decoration: BoxDecoration(color: Theme.of(context).primaryColor),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -296,10 +294,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   ),
                   Text(
                     currentUser?.email ?? '',
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 14,
-                    ),
+                    style: const TextStyle(color: Colors.white70, fontSize: 14),
                   ),
                 ],
               ),
@@ -319,7 +314,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => ProfileScreen(userId: currentUser!.id),
+                    builder: (context) =>
+                        ProfileScreen(userId: currentUser!.id),
                   ),
                 );
               },
@@ -332,7 +328,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => OrderHistoryScreen(userId: currentUser!.id),
+                    builder: (context) =>
+                        OrderHistoryScreen(userId: currentUser!.id),
                   ),
                 );
               },
@@ -460,7 +457,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 ],
               ),
             ),
-
     );
   }
 
@@ -642,7 +638,16 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                           child: Container(
                             height: 100,
                             color: Colors.grey[300],
-                            child: const Icon(Icons.restaurant),
+                            child: (store.storeImage ?? '').trim().isNotEmpty
+                                ? Image.network(
+                                    (store.storeImage ?? '').trim(),
+                                    fit: BoxFit.cover,
+                                    width: double.infinity,
+                                    errorBuilder:
+                                        (context, error, stackTrace) =>
+                                            const Icon(Icons.restaurant),
+                                  )
+                                : const Icon(Icons.restaurant),
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -665,7 +670,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              store.rating?.toStringAsFixed(1) ?? 'N/A',
+                              (store.rating ?? 0).toStringAsFixed(1),
                               style: const TextStyle(fontSize: 11),
                             ),
                           ],
@@ -725,7 +730,16 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                         width: 100,
                         height: 100,
                         color: Colors.grey[300],
-                        child: const Icon(Icons.restaurant),
+                        child: (store.storeImage ?? '').trim().isNotEmpty
+                            ? Image.network(
+                                (store.storeImage ?? '').trim(),
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                height: double.infinity,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    const Icon(Icons.restaurant),
+                              )
+                            : const Icon(Icons.restaurant),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -750,7 +764,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                store.rating?.toStringAsFixed(1) ?? 'N/A',
+                                (store.rating ?? 0).toStringAsFixed(1),
                                 style: const TextStyle(fontSize: 12),
                               ),
                               if (store.totalRatings != null) ...[

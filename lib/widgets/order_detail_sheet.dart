@@ -44,9 +44,10 @@ class _OrderDetailSheetState extends State<OrderDetailSheet> {
   }
 
   void _confirmAcceptOrder(BuildContext context, DriverController controller) {
+    final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: const Text(
           'Nhận đơn hàng',
@@ -73,7 +74,7 @@ class _OrderDetailSheetState extends State<OrderDetailSheet> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text(
               'Hủy',
               style: TextStyle(color: AppColors.textSecondary),
@@ -81,25 +82,26 @@ class _OrderDetailSheetState extends State<OrderDetailSheet> {
           ),
           FilledButton(
             onPressed: () async {
-              Navigator.pop(context); // Đóng dialog
-              Navigator.pop(context); // Đóng bottom sheet
+              Navigator.of(dialogContext).pop(); // Đóng dialog
+              Navigator.of(context).pop(); // Đóng bottom sheet
               final error = await controller.acceptOrder(widget.order.orderId);
-              if (mounted) {
-                if (error != null) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text('Lỗi: $error')));
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Nhận đơn thành công! Hãy vào tab Đơn hàng để thực hiện',
-                      ),
-                      backgroundColor: AppColors.success,
-                    ),
-                  );
-                }
+              if (scaffoldMessenger == null) return;
+
+              if (error != null) {
+                scaffoldMessenger.showSnackBar(
+                  SnackBar(content: Text('Lỗi: $error')),
+                );
+                return;
               }
+
+              scaffoldMessenger.showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Nhận đơn thành công! Hãy vào tab Đơn hàng để thực hiện',
+                  ),
+                  backgroundColor: AppColors.success,
+                ),
+              );
             },
             child: const Text('Xác nhận'),
           ),
@@ -115,7 +117,7 @@ class _OrderDetailSheetState extends State<OrderDetailSheet> {
         .map((item) => item['name'] ?? 'Sản phẩm')
         .join(', ');
     final isPending = [
-      'pending',
+      'finding_driver',
       'searching',
       'dang_tim_xe',
     ].contains(widget.order.status.toLowerCase());

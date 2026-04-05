@@ -31,9 +31,15 @@ class OrderTrackingProvider extends ChangeNotifier {
       case 'confirmed':
       case 'preparing':
         return 'Store preparing';
+      case 'finding_driver':
+        return 'Finding driver';
+      case 'ready':
+        return 'Ready for pickup';
       case 'delivering':
+      case 'on_the_way':
         return 'Driver delivering';
       case 'completed':
+      case 'delivered':
         return 'Done';
       case 'cancelled':
         return 'Cancelled';
