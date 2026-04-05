@@ -10,12 +10,15 @@ class OrderController {
   Stream<List<OrderData>> watchAvailableOrders() {
     return _firestore
         .collection(_ordersCollection)
-        .where('status', whereIn: ['pending', 'searching', 'dang_tim_xe'])
+        .where('status', whereIn: ['pending', 'searching', 'dang_tim_xe', 'finding_driver'])
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs
+          final orders = snapshot.docs
               .map((doc) => OrderData.fromMap({...doc.data(), 'orderId': doc.id}))
               .toList();
+          
+          print("FIRESTORE: Tìm thấy ${orders.length} đơn hàng khả dụng. Trạng thái: ${orders.map((e) => e.status).toList()}");
+          return orders;
         });
   }
 

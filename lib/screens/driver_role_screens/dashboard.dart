@@ -10,6 +10,7 @@ import '../../widgets/order_card.dart';
 import 'profile_screen.dart';
 import 'activity_screen.dart';
 import 'active_orders_screen.dart';
+import 'order_detail_screen.dart';
 
 class DriverDashboard extends StatefulWidget {
   const DriverDashboard({super.key, required this.authService});
@@ -21,13 +22,25 @@ class DriverDashboard extends StatefulWidget {
 }
 
 class _DriverDashboardState extends State<DriverDashboard> {
-  int _selectedIndex = 0;
   final currencyFormat = NumberFormat.currency(locale: 'vi_VN', symbol: 'đ');
+  late final DriverController _driverController;
+
+  @override
+  void initState() {
+    super.initState();
+    _driverController = DriverController()..init();
+  }
+
+  @override
+  void dispose() {
+    _driverController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => DriverController()..init(),
+    return ChangeNotifierProvider.value(
+      value: _driverController,
       child: Consumer<DriverController>(
         builder: (context, controller, _) {
           final user = widget.authService.currentUser;
@@ -35,7 +48,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
 
           return Scaffold(
             body: IndexedStack(
-              index: _selectedIndex,
+              index: (controller.selectedIndex ?? 0).clamp(0, 3),
               children: [
                 _buildMainDashboard(user, controller),
                 const DriverActiveOrdersScreen(),
@@ -44,8 +57,8 @@ class _DriverDashboardState extends State<DriverDashboard> {
               ],
             ),
             bottomNavigationBar: NavigationBar(
-              selectedIndex: _selectedIndex,
-              onDestinationSelected: (index) => setState(() => _selectedIndex = index),
+              selectedIndex: (controller.selectedIndex ?? 0).clamp(0, 3),
+              onDestinationSelected: (index) => controller.setSelectedIndex(index),
               destinations: const [
                 NavigationDestination(
                   icon: Icon(Icons.dashboard_outlined),

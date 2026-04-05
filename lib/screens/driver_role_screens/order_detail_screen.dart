@@ -9,6 +9,7 @@ import '../../services/user_service.dart';
 import '../../controller/driver_controller.dart';
 import '../../theme/app_colors.dart';
 import 'package:provider/provider.dart';
+import 'order_map_screen.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final OrderData order;
@@ -102,6 +103,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     content: Text('Nhận đơn thành công!'),
                     backgroundColor: AppColors.success,
                   ));
+                  controller.setSelectedIndex(1); // Chuyển sang Tab Đơn hàng
                   Navigator.pop(context); // Quay lại dashboard
                 }
               }
@@ -116,12 +118,34 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isPending = ['pending', 'searching', 'dang_tim_xe'].contains(widget.order.status.toLowerCase());
+    final isPending = ['pending', 'searching', 'dang_tim_xe', 'finding_driver', 'finding-driver']
+        .contains(widget.order.status.toLowerCase());
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Chi tiết đơn hàng'),
         centerTitle: true,
+        actions: [
+          IconButton(
+            onPressed: () {
+              final driverController = context.read<DriverController>();
+              final bool isHistory = ['delivered', 'cancelled'].contains(widget.order.status.toLowerCase());
+              
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => OrderMapScreen(
+                    order: widget.order,
+                    currentLocation: driverController.currentLocation,
+                    isHistory: isHistory,
+                  ),
+                ),
+              );
+            },
+            icon: const Icon(Icons.map_rounded),
+            tooltip: 'Xem bản đồ',
+          ),
+        ],
       ),
       body: _isLoading 
         ? const Center(child: CircularProgressIndicator())
@@ -317,6 +341,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       case 'on_the_way': return 'Đang giao';
       case 'delivered': return 'Hoàn thành';
       case 'cancelled': return 'Đã hủy';
+      case 'finding_driver':
+      case 'finding-driver': return 'Đang tìm tài xế';
       default: return status;
     }
   }
