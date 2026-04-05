@@ -1,10 +1,10 @@
-import 'dart:typed_data';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/food_item.dart';
+import 'supabase_config.dart';
 
 class MenuService {
   MenuService._();
@@ -16,18 +16,21 @@ class MenuService {
 
   static const String _foodsCollection = 'Foods';
   static const String _categoriesCollection = 'Categories';
-  static const String _storageBucket = String.fromEnvironment(
-    'SUPABASE_STORAGE_BUCKET',
-    defaultValue: 'food-images',
-  );
 
   static String getPublicImageUrl(String path) {
-    if (path.isEmpty) return '';
-    if (path.startsWith('http')) return path; // Already a full URL (e.g., from public storage or other source)
-    
+    if (path.isEmpty) {
+      return '';
+    }
+    if (path.startsWith('http')) {
+      return path;
+    }
+
     try {
       if (Supabase.instance.isInitialized) {
-        return Supabase.instance.client.storage.from(_storageBucket).getPublicUrl(path);
+        final storageBucket = SupabaseConfig.instance.storageBucket;
+        return Supabase.instance.client.storage
+            .from(storageBucket)
+            .getPublicUrl(path);
       }
     } catch (_) {
       // Supabase not initialized or other error
@@ -62,13 +65,11 @@ class MenuService {
         .where('store_id', isEqualTo: finalStoreId)
         .snapshots()
         .map((snapshot) {
-          final items = snapshot.docs
-              .map((doc) {
-                final item = FoodItem.fromMap(doc.data(), docId: doc.id);
-                // Resolve image path to public URL
-                return item.copyWith(image: getPublicImageUrl(item.image));
-              })
-              .toList();
+          final items = snapshot.docs.map((doc) {
+            final item = FoodItem.fromMap(doc.data(), docId: doc.id);
+            // Resolve image path to public URL
+            return item.copyWith(image: getPublicImageUrl(item.image));
+          }).toList();
           items.sort(
             (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
           );
@@ -86,13 +87,11 @@ class MenuService {
         .where('store_id', isEqualTo: storeId)
         .snapshots()
         .map((snapshot) {
-          final items = snapshot.docs
-              .map((doc) {
-                final item = FoodItem.fromMap(doc.data(), docId: doc.id);
-                // Resolve image path to public URL
-                return item.copyWith(image: getPublicImageUrl(item.image));
-              })
-              .toList();
+          final items = snapshot.docs.map((doc) {
+            final item = FoodItem.fromMap(doc.data(), docId: doc.id);
+            // Resolve image path to public URL
+            return item.copyWith(image: getPublicImageUrl(item.image));
+          }).toList();
           items.sort(
             (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
           );
@@ -103,15 +102,13 @@ class MenuService {
   Future<List<FoodItem>> getAllFoods() async {
     try {
       final snapshot = await _firestore.collection(_foodsCollection).get();
-      return snapshot.docs
-          .map((doc) {
-            final item = FoodItem.fromMap(doc.data(), docId: doc.id);
-            // Resolve image path to public URL
-            return item.copyWith(image: getPublicImageUrl(item.image));
-          })
-          .toList();
+      return snapshot.docs.map((doc) {
+        final item = FoodItem.fromMap(doc.data(), docId: doc.id);
+        // Resolve image path to public URL
+        return item.copyWith(image: getPublicImageUrl(item.image));
+      }).toList();
     } catch (e) {
-      print('Error fetching all foods: $e');
+      debugPrint('Error fetching all foods: $e');
       return [];
     }
   }
@@ -228,20 +225,21 @@ class MenuService {
     }
 
     final SupabaseClient supabase = Supabase.instance.client;
+    final storageBucket = SupabaseConfig.instance.storageBucket;
 
     final safeName = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
     final path =
         'foods/$storeId/${DateTime.now().millisecondsSinceEpoch}_$safeName';
 
     await supabase.storage
-        .from(_storageBucket)
+        .from(storageBucket)
         .uploadBinary(
           path,
           bytes,
           fileOptions: const FileOptions(upsert: true),
         );
 
-    return supabase.storage.from(_storageBucket).getPublicUrl(path);
+    return supabase.storage.from(storageBucket).getPublicUrl(path);
   }
 
   Map<String, dynamic> _sanitizeOptions(Map<String, dynamic> source) {

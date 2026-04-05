@@ -53,7 +53,7 @@ class SearchService {
         );
       }).toList();
     } catch (e) {
-      print('Error fetching all stores: $e');
+      debugPrint('Error fetching all stores: $e');
       return [];
     }
   }
@@ -126,7 +126,9 @@ class SearchService {
           .where((doc) {
             final data = doc.data() as Map<String, dynamic>;
             final name = (data['name'] ?? '').toString().toLowerCase();
-            final description = (data['description'] ?? '').toString().toLowerCase();
+            final description = (data['description'] ?? '')
+                .toString()
+                .toLowerCase();
             return name.contains(query.toLowerCase()) ||
                 description.contains(query.toLowerCase());
           })
@@ -159,12 +161,10 @@ class SearchService {
 
       final snapshot = await query.get();
 
-      return snapshot.docs
-          .map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            return FoodItem.fromMap(data, docId: doc.id);
-          })
-          .toList();
+      return snapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return FoodItem.fromMap(data, docId: doc.id);
+      }).toList();
     } catch (e) {
       rethrow;
     }
@@ -242,13 +242,12 @@ class SearchService {
 
       final foods = snapshot.docs
           .where((doc) {
-            final data = doc.data() as Map<String, dynamic>;
+            final data = doc.data();
             final name = (data['name'] ?? '').toString().toLowerCase();
             return name.contains(query.toLowerCase());
           })
           .map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            return FoodItem.fromMap(data, docId: doc.id);
+            return FoodItem.fromMap(doc.data(), docId: doc.id);
           })
           .toList();
 
@@ -270,8 +269,7 @@ class SearchService {
 
       return snapshot.docs
           .map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            return FoodItem.fromMap(data, docId: doc.id);
+            return FoodItem.fromMap(doc.data(), docId: doc.id);
           })
           .where((f) => f.isAvailable) // Lọc thủ công để tránh lỗi index
           .toList();
@@ -291,8 +289,7 @@ class SearchService {
 
       return snapshot.docs
           .map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            return FoodItem.fromMap(data, docId: doc.id);
+            return FoodItem.fromMap(doc.data(), docId: doc.id);
           })
           .where((f) => f.isAvailable) // Lọc thủ công để tránh lỗi index
           .toList();
@@ -300,6 +297,7 @@ class SearchService {
       rethrow;
     }
   }
+
   double _parseLat(dynamic pos) {
     if (pos is GeoPoint) return pos.latitude;
     if (pos is Map) {

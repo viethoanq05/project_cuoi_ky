@@ -21,6 +21,7 @@ class OrderService extends ChangeNotifier {
     required List<Map<String, dynamic>> items,
     required double totalAmount,
     required double deliveryFee,
+    required String paymentMethod,
     DateTime? scheduledTime,
     String? deliveryAddress,
     double? deliveryLat,
@@ -39,6 +40,7 @@ class OrderService extends ChangeNotifier {
         items: items,
         totalAmount: totalAmount,
         deliveryFee: deliveryFee,
+        paymentMethod: paymentMethod,
         status: 'pending',
         scheduledTime: scheduledTime,
         createdAt: now,
@@ -49,23 +51,60 @@ class OrderService extends ChangeNotifier {
         notes: notes,
       );
 
-      await _firestore.collection('Orders').doc(orderId).set(order.toMap());
-      
-      // Thêm vào collection của khách hàng
-      await _firestore
-          .collection('Users')
-          .doc(customerId)
-          .collection('Orders')
-          .doc(orderId)
-          .set(order.toMap());
+      if (paymentMethod == 'wallet') {
+        await _firestore.runTransaction((transaction) async {
+          final userRef = _firestore.collection('Users').doc(customerId);
+          final userSnapshot = await transaction.get(userRef);
 
-      // Thêm vào collection của cửa hàng
-      await _firestore
-          .collection('Users')
-          .doc(storeId)
-          .collection('Orders')
-          .doc(orderId)
-          .set(order.toMap());
+          if (!userSnapshot.exists) {
+            throw Exception('User không tồn tại');
+          }
+
+          final walletBalance =
+              (userSnapshot.data()?['wallet_balance'] as num?)?.toDouble() ??
+              0.0;
+
+          if (walletBalance < totalAmount) {
+            throw Exception('Số dư ví không đủ');
+          }
+
+          transaction.update(userRef, {
+            'wallet_balance': FieldValue.increment(-totalAmount),
+            'updatedAt': now,
+          });
+
+          final ordersRef = _firestore.collection('Orders').doc(orderId);
+          transaction.set(ordersRef, order.toMap());
+
+          final customerOrderRef = userRef.collection('Orders').doc(orderId);
+          transaction.set(customerOrderRef, order.toMap());
+
+          final storeOrderRef = _firestore
+              .collection('Users')
+              .doc(storeId)
+              .collection('Orders')
+              .doc(orderId);
+          transaction.set(storeOrderRef, order.toMap());
+        });
+      } else {
+        await _firestore.collection('Orders').doc(orderId).set(order.toMap());
+
+        // Thêm vào collection của khách hàng
+        await _firestore
+            .collection('Users')
+            .doc(customerId)
+            .collection('Orders')
+            .doc(orderId)
+            .set(order.toMap());
+
+        // Thêm vào collection của cửa hàng
+        await _firestore
+            .collection('Users')
+            .doc(storeId)
+            .collection('Orders')
+            .doc(orderId)
+            .set(order.toMap());
+      }
 
       notifyListeners();
       return order;
@@ -83,8 +122,21 @@ class OrderService extends ChangeNotifier {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs.map((doc) => OrderData.fromMap(doc.data())).toList();
-    });
+          return snapshot.docs
+              .map((doc) => OrderData.fromMap(doc.data()))
+              .toList();
+        });
+  }
+
+  Future<bool> validateWalletBalance(String customerId, double amount) async {
+    final doc = await _firestore.collection('Users').doc(customerId).get();
+    if (!doc.exists) {
+      throw Exception('User không tồn tại');
+    }
+
+    final walletBalance =
+        (doc.data()?['wallet_balance'] as num?)?.toDouble() ?? 0.0;
+    return walletBalance >= amount;
   }
 
   // Lấy danh sách đơn hàng của cửa hàng
@@ -96,8 +148,10 @@ class OrderService extends ChangeNotifier {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs.map((doc) => OrderData.fromMap(doc.data())).toList();
-    });
+          return snapshot.docs
+              .map((doc) => OrderData.fromMap(doc.data()))
+              .toList();
+        });
   }
 
   // Cập nhật trạng thái đơn hàng
@@ -108,11 +162,11 @@ class OrderService extends ChangeNotifier {
   }) async {
     try {
       final now = DateTime.now();
-      final updateData = {
+      final updateData = <String, dynamic>{
         'status': newStatus,
         'updatedAt': now,
-        if (driverId != null) 'driverId': driverId,
-      };
+        'driverId': driverId,
+      }..removeWhere((key, value) => value == null);
 
       // Cập nhật collection orders chính
       await _firestore.collection('Orders').doc(orderId).update(updateData);
@@ -120,8 +174,12 @@ class OrderService extends ChangeNotifier {
       // Lấy order để cập nhật ở user collections
       final orderDoc = await _firestore.collection('Orders').doc(orderId).get();
       if (orderDoc.exists) {
-        final order = OrderData.fromMap(orderDoc.data() as Map<String, dynamic>);
-        
+        final orderData = orderDoc.data();
+        if (orderData == null) {
+          return;
+        }
+        final order = OrderData.fromMap(orderData);
+
         // Cập nhật ở khách hàng
         await _firestore
             .collection('Users')
@@ -146,11 +204,7 @@ class OrderService extends ChangeNotifier {
   }
 
   // Thêm đánh giá
-  Future<void> addReview(
-    String orderId,
-    double rating,
-    String review,
-  ) async {
+  Future<void> addReview(String orderId, double rating, String review) async {
     try {
       await _firestore.collection('Orders').doc(orderId).update({
         'rating': rating,
@@ -160,8 +214,10 @@ class OrderService extends ChangeNotifier {
 
       final orderDoc = await _firestore.collection('Orders').doc(orderId).get();
       if (orderDoc.exists) {
-        final order = OrderData.fromMap(orderDoc.data() as Map<String, dynamic>);
-        
+        final order = OrderData.fromMap(
+          orderDoc.data() as Map<String, dynamic>,
+        );
+
         await _firestore
             .collection('Users')
             .doc(order.customerId)

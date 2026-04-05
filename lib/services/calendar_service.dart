@@ -1,4 +1,5 @@
 import 'package:add_2_calendar/add_2_calendar.dart';
+import 'package:flutter/foundation.dart';
 import '../models/order.dart';
 
 class CalendarService {
@@ -6,13 +7,16 @@ class CalendarService {
     if (order.scheduledTime == null) return false;
 
     // Build event description
-    final itemsList = order.items.map((item) {
-      final name = item['foodName'] ?? 'Món ăn';
-      final qty = item['quantity'] ?? 1;
-      return '- $name x$qty';
-    }).join('\n');
+    final itemsList = order.items
+        .map((item) {
+          final name = item['foodName'] ?? 'Món ăn';
+          final qty = item['quantity'] ?? 1;
+          return '- $name x$qty';
+        })
+        .join('\n');
 
-    final description = 'Đơn hàng từ: ${order.storeName}\n\n'
+    final description =
+        'Đơn hàng từ: ${order.storeName}\n\n'
         'Chi tiết món ăn:\n$itemsList\n\n'
         'Tổng tiền: ${order.totalAmount.toStringAsFixed(0)}đ\n'
         'Ghi chú: ${order.notes ?? "Không có"}';
@@ -29,7 +33,7 @@ class CalendarService {
     try {
       return await Add2Calendar.addEvent2Cal(event);
     } catch (e) {
-      print('Error adding to calendar: $e');
+      debugPrint('Error adding to calendar: $e');
       return false;
     }
   }

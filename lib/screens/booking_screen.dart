@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
 import '../services/cart_service.dart';
 import '../services/order_service.dart';
@@ -22,17 +23,24 @@ class _BookingScreenState extends State<BookingScreen> {
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
   String _deliveryOption = 'now'; // 'now' hoặc 'scheduled'
+  String _paymentMethod = 'cod'; // 'cod', 'wallet'
   final _notesController = TextEditingController();
   bool _isProcessing = false;
 
   @override
   void initState() {
     super.initState();
+    _initializeLocale();
     _cartService = CartService();
     _orderService = OrderService();
     _authService = AuthService.instance;
     _selectedDate = DateTime.now().add(const Duration(days: 1));
     _selectedTime = const TimeOfDay(hour: 12, minute: 0);
+  }
+
+  Future<void> _initializeLocale() async {
+    await initializeDateFormatting('vi_VN', null);
+    Intl.defaultLocale = 'vi_VN';
   }
 
   @override
@@ -98,6 +106,12 @@ class _BookingScreenState extends State<BookingScreen> {
               _buildSectionTitle('Thời gian giao hàng'),
               const SizedBox(height: 12),
               _buildDeliveryOptions(),
+              const SizedBox(height: 24),
+
+              // Payment Method
+              _buildSectionTitle('Phương thức thanh toán'),
+              const SizedBox(height: 12),
+              _buildPaymentMethodSelector(),
               const SizedBox(height: 24),
 
               // Calendar & Time (nếu chọn scheduled)
@@ -191,6 +205,31 @@ class _BookingScreenState extends State<BookingScreen> {
             subtitle: Text('Chọn thời gian nhận hàng phù hợp'),
             activeColor: AppColors.primary,
             value: 'scheduled',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentMethodSelector() {
+    return RadioGroup<String>(
+      groupValue: _paymentMethod,
+      onChanged: (value) {
+        setState(() => _paymentMethod = value ?? 'cod');
+      },
+      child: Column(
+        children: const [
+          RadioListTile<String>(
+            title: Text('Thanh toán khi nhận hàng'),
+            subtitle: Text('Trả tiền trực tiếp cho tài xế'),
+            activeColor: AppColors.primary,
+            value: 'cod',
+          ),
+          RadioListTile<String>(
+            title: Text('Ví điện tử'),
+            subtitle: Text('Thanh toán bằng ví nội bộ'),
+            activeColor: AppColors.primary,
+            value: 'wallet',
           ),
         ],
       ),
@@ -353,13 +392,32 @@ class _BookingScreenState extends State<BookingScreen> {
           ? (_cartService.items.first.storeName ?? 'Cửa hàng')
           : 'Cửa hàng';
 
+      if (_paymentMethod == 'wallet') {
+        final hasFunds = await _orderService.validateWalletBalance(
+          currentUser.id,
+          orderData['totalAmount'],
+        );
+        if (!hasFunds) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Số dư ví không đủ để đặt hàng'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        }
+      }
+
       final OrderData order = await _orderService.createOrder(
-        customerId: currentUser.email,
+        customerId: currentUser.id,
         storeId: orderData['storeId'],
         storeName: storeName,
         items: orderData['items'],
         totalAmount: orderData['totalAmount'],
         deliveryFee: 0,
+        paymentMethod: _paymentMethod,
         scheduledTime: scheduledTime,
         deliveryAddress: currentUser.address,
         deliveryLat: currentUser.position?['latitude'],

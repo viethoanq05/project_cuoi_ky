@@ -6,23 +6,19 @@ class WeatherWidget extends StatelessWidget {
   final WeatherData? weather;
   final VoidCallback? onRefresh;
 
-  const WeatherWidget({
-    super.key,
-    this.weather,
-    this.onRefresh,
-  });
+  const WeatherWidget({super.key, this.weather, this.onRefresh});
 
   @override
   Widget build(BuildContext context) {
     // Nếu chưa có thời tiết, hiển thị placeholder mờ hoặc loading
     final bool isWeatherLoaded = weather != null;
-    
+
     return Container(
       margin: const EdgeInsets.only(bottom: 24),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: isWeatherLoaded 
+          colors: isWeatherLoaded
               ? _getWeatherColors(weather!.condition)
               : [Colors.grey[400]!, Colors.grey[600]!],
           begin: Alignment.topLeft,
@@ -31,7 +27,7 @@ class WeatherWidget extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 26),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -44,7 +40,9 @@ class WeatherWidget extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isWeatherLoaded ? _getGreeting(weather!.condition) : 'Đang tải thời tiết...',
+                  isWeatherLoaded
+                      ? _getGreeting(weather!.condition)
+                      : 'Đang tải thời tiết...',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 18,
@@ -54,12 +52,18 @@ class WeatherWidget extends StatelessWidget {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    const Icon(Icons.location_on, color: Colors.white, size: 14),
+                    const Icon(
+                      Icons.location_on,
+                      color: Colors.white,
+                      size: 14,
+                    ),
                     const SizedBox(width: 4),
                     Text(
-                      isWeatherLoaded ? weather!.cityName : 'Đang xác định vị trí...',
+                      isWeatherLoaded
+                          ? weather!.cityName
+                          : 'Đang xác định vị trí...',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.9),
+                        color: Colors.white.withValues(alpha: 230),
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
                       ),
@@ -68,18 +72,21 @@ class WeatherWidget extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  isWeatherLoaded 
+                  isWeatherLoaded
                       ? '${weather!.temp.toStringAsFixed(1)}°C • ${weather!.description}'
                       : 'Vui lòng đợi trong giây lát',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.9),
+                    color: Colors.white.withValues(alpha: 230),
                     fontSize: 14,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  isWeatherLoaded 
-                      ? _getRecommendationText(weather!.condition, weather!.temp)
+                  isWeatherLoaded
+                      ? _getRecommendationText(
+                          weather!.condition,
+                          weather!.temp,
+                        )
                       : 'Đang tìm kiếm gợi ý phù hợp...',
                   style: const TextStyle(
                     color: Colors.white,
@@ -115,7 +122,11 @@ class WeatherWidget extends StatelessWidget {
               if (onRefresh != null)
                 IconButton(
                   onPressed: onRefresh,
-                  icon: const Icon(Icons.refresh, color: Colors.white70, size: 20),
+                  icon: const Icon(
+                    Icons.refresh,
+                    color: Colors.white70,
+                    size: 20,
+                  ),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                 ),
@@ -137,7 +148,7 @@ class WeatherWidget extends StatelessWidget {
       case 'Clouds':
         return [const Color(0xFFbdc3c7), const Color(0xFF2c3e50)];
       default:
-        return [AppColors.primary, AppColors.primary.withOpacity(0.7)];
+        return [AppColors.primary, AppColors.primary.withValues(alpha: 179)];
     }
   }
 
