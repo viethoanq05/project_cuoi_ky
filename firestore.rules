@@ -127,13 +127,63 @@ service cloud.firestore {
         && request.resource.data.created_at is timestamp
         && hasValidRoleInfo(request.resource.data);
 
-      allow update: if isOwner(uid)
+      function canAnyonePatchStoreAggregates(targetUid) {
+        return signedIn()
+          && exists(/databases/$(database)/documents/Users/$(targetUid))
+          && (get(/databases/$(database)/documents/Users/$(targetUid)).data.role in ['Store', 'store'])
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'rating',
+            'avgRating',
+            'avg_rating',
+            'totalRatings',
+            'total_ratings',
+            'updated_at',
+            'updatedAt'
+          ])
+          && (!('rating' in request.resource.data) || request.resource.data.rating is number)
+          && (!('avgRating' in request.resource.data) || request.resource.data.avgRating is number)
+          && (!('avg_rating' in request.resource.data) || request.resource.data.avg_rating is number)
+          && (!('totalRatings' in request.resource.data) || request.resource.data.totalRatings is int)
+          && (!('total_ratings' in request.resource.data) || request.resource.data.total_ratings is int)
+          && (!('updated_at' in request.resource.data) || request.resource.data.updated_at is timestamp)
+          && (!('updatedAt' in request.resource.data) || request.resource.data.updatedAt is timestamp);
+      }
+
+      allow update: if (isOwner(uid)
         && (
           (hasCoreFields(request.resource.data, uid)
             && hasValidRoleInfo(request.resource.data))
           || canOwnerPatchStoreProfile(uid)
-        );
+        ))
+        || canAnyonePatchStoreAggregates(uid);
 
+      allow delete: if false;
+    }
+
+    // Mirror orders stored under Users/{uid}/Orders/{orderId}
+    match /Users/{uid}/Orders/{orderId} {
+      allow read, list: if signedIn() && (isOwner(uid) || isStore() || isDriver());
+
+      // Allow creating/updating the customer's own mirror.
+      function isCustomerMirrorWrite() {
+        return signedIn()
+          && isOwner(uid)
+          && (
+            (('customerId' in request.resource.data) && request.resource.data.customerId == request.auth.uid)
+            || (('customer_id' in request.resource.data) && request.resource.data.customer_id == request.auth.uid)
+            || (('user_id' in request.resource.data) && request.resource.data.user_id == request.auth.uid)
+          );
+      }
+
+      // Allow creating/updating the store's mirror when the document is for that store.
+      function isStoreMirrorWrite() {
+        return signedIn()
+          && (('storeId' in request.resource.data && request.resource.data.storeId == uid)
+            || ('store_id' in request.resource.data && request.resource.data.store_id == uid));
+      }
+
+      allow create: if signedIn() && (isCustomerMirrorWrite() || isStoreMirrorWrite());
+      allow update: if signedIn() && (isCustomerMirrorWrite() || isStoreMirrorWrite());
       allow delete: if false;
     }
 
@@ -166,10 +216,31 @@ service cloud.firestore {
         && isStoreUser(request.auth.uid)
         && isValidFoodShape(request.resource.data, foodId);
 
-      allow update: if signedIn()
+      function canPatchFoodAggregates() {
+        return signedIn()
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'avgRating',
+            'avg_rating',
+            'rating',
+            'totalRatings',
+            'total_ratings',
+            'updated_at',
+            'updatedAt'
+          ])
+          && (!('avgRating' in request.resource.data) || request.resource.data.avgRating is number)
+          && (!('avg_rating' in request.resource.data) || request.resource.data.avg_rating is number)
+          && (!('rating' in request.resource.data) || request.resource.data.rating is number)
+          && (!('totalRatings' in request.resource.data) || request.resource.data.totalRatings is int)
+          && (!('total_ratings' in request.resource.data) || request.resource.data.total_ratings is int)
+          && (!('updated_at' in request.resource.data) || request.resource.data.updated_at is timestamp)
+          && (!('updatedAt' in request.resource.data) || request.resource.data.updatedAt is timestamp);
+      }
+
+      allow update: if (signedIn()
         && isStoreUser(request.auth.uid)
         && resource.data.store_id == request.auth.uid
-        && isValidFoodShape(request.resource.data, foodId);
+        && isValidFoodShape(request.resource.data, foodId))
+        || canPatchFoodAggregates();
 
       allow delete: if signedIn()
         && isStoreUser(request.auth.uid)
@@ -186,6 +257,26 @@ service cloud.firestore {
     // the app code may evolve. It focuses on protecting ownership and preventing
     // drivers from mutating arbitrary fields.
     match /Orders/{orderId} {
+            function canCustomerSubmitReview() {
+              return signedIn()
+                && canCustomerSee(resource.data)
+                && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+                  'rating',
+                  'review',
+                  'updated_at',
+                  'updatedAt'
+                ])
+                && (!('rating' in resource.data) || resource.data.rating == null || resource.data.rating == 0)
+                && (!('review' in resource.data) || resource.data.review == null || resource.data.review == '')
+                && ('rating' in request.resource.data)
+                && request.resource.data.rating is number
+                && request.resource.data.rating >= 1
+                && request.resource.data.rating <= 5
+                && ('review' in request.resource.data)
+                && request.resource.data.review is string
+                && (!('updated_at' in request.resource.data) || request.resource.data.updated_at is timestamp)
+                && (!('updatedAt' in request.resource.data) || request.resource.data.updatedAt is timestamp);
+            }
       function isFindingStatus(status) {
         return status in ['dang_tim_xe', 'finding_driver', 'Searching', 'searching'];
       }
@@ -266,12 +357,41 @@ service cloud.firestore {
       // Keep create denied by default.
       allow create: if false;
 
-      // Allow driver accept flow and store status updates for own orders.
-      allow update: if signedIn() && (canDriverAcceptOrder() || canStoreUpdateOrderStatus());
+      // Allow driver accept flow, store status updates, and customer review submission.
+      allow update: if signedIn() && (canDriverAcceptOrder() || canStoreUpdateOrderStatus() || canCustomerSubmitReview());
 
       allow delete: if false;
     }
 
+    // Lowercase reviews collection used by the app.
+    match /reviews/{reviewId} {
+      function canReviewerSee(review) {
+        return signedIn() && ('user_id' in review) && review.user_id == request.auth.uid;
+      }
+
+      function canStoreSeeReview(review) {
+        return isStore() && ('store_id' in review) && review.store_id == request.auth.uid;
+      }
+
+      function isValidNewReview() {
+        return signedIn()
+          && request.resource.data.user_id == request.auth.uid
+          && request.resource.data.order_id is string
+          && request.resource.data.store_id is string
+          && request.resource.data.rating is int
+          && request.resource.data.rating >= 1
+          && request.resource.data.rating <= 5
+          && request.resource.data.comment is string
+          && request.resource.data.comment.size() > 0;
+      }
+
+      allow read: if canStoreSeeReview(resource.data) || canReviewerSee(resource.data);
+      allow create: if isValidNewReview();
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // Legacy/unused (kept for backward compatibility)
     match /Reviews/{reviewId} {
       function canStoreSeeReview(review) {
         return isStore() && ('store_id' in review) && review.store_id == request.auth.uid;

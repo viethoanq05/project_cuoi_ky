@@ -238,8 +238,13 @@ class _StoreProfileTabState extends State<StoreProfileTab> {
 
     final address = profile.address.trim();
     if (address.isNotEmpty) {
+      final normalized =
+          address.toLowerCase().contains('việt nam') ||
+              address.toLowerCase().contains('vietnam')
+          ? address
+          : '$address, Việt Nam';
       try {
-        final results = await locationFromAddress(address);
+        final results = await locationFromAddress(normalized);
         if (results.isNotEmpty) {
           final point = results.first;
           return LatLng(point.latitude, point.longitude);
@@ -474,8 +479,14 @@ class _StoreProfileTabState extends State<StoreProfileTab> {
       return;
     }
 
+    final normalized =
+        address.toLowerCase().contains('việt nam') ||
+            address.toLowerCase().contains('vietnam')
+        ? address
+        : '$address, Việt Nam';
+
     try {
-      final locations = await locationFromAddress(address);
+      final locations = await locationFromAddress(normalized);
       if (locations.isEmpty || !mounted) {
         return;
       }

@@ -17,6 +17,151 @@ class MenuService {
   static const String _foodsCollection = 'Foods';
   static const String _categoriesCollection = 'Categories';
 
+  Iterable<List<T>> _chunks<T>(List<T> items, int size) sync* {
+    for (var start = 0; start < items.length; start += size) {
+      yield items.sublist(start, (start + size).clamp(0, items.length));
+    }
+  }
+
+  String _asText(dynamic value) => value?.toString().trim() ?? '';
+
+  double _asDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(_asText(value)) ?? 0.0;
+  }
+
+  Future<
+    ({
+      Map<String, ({double avg, int count})> foodAgg,
+      ({double avg, int count}) storeAgg,
+    })
+  >
+  _computeFoodAggregatesFromReviewsForStore(
+    String storeId,
+    Set<String> foodIds,
+  ) async {
+    final reviewSnapshot = await _firestore
+        .collection('reviews')
+        .where('store_id', isEqualTo: storeId)
+        .get();
+
+    final orderRating = <String, double>{};
+    double storeSum = 0.0;
+    var storeCount = 0;
+
+    for (final doc in reviewSnapshot.docs) {
+      final data = doc.data();
+      final orderId = _asText(data['order_id']);
+      if (orderId.isEmpty) continue;
+      final rating = _asDouble(data['rating']);
+      if (rating <= 0) continue;
+      orderRating[orderId] = rating;
+      storeSum += rating;
+      storeCount += 1;
+    }
+
+    final foodSum = <String, double>{};
+    final foodCount = <String, int>{};
+
+    final orderIds = orderRating.keys.toList();
+    const chunkSize = 10;
+    for (final chunk in _chunks(orderIds, chunkSize)) {
+      final ordersSnap = await _firestore
+          .collection('Orders')
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get();
+
+      for (final orderDoc in ordersSnap.docs) {
+        final rating = orderRating[orderDoc.id] ?? 0.0;
+        if (rating <= 0) continue;
+
+        final orderData = orderDoc.data();
+        final rawItems = orderData['items'] ?? orderData['order_items'];
+        final items = rawItems is List ? rawItems : const [];
+
+        final uniqueFoodIds = <String>{};
+        for (final item in items) {
+          if (item is! Map) continue;
+          final foodId = _asText(
+            item['food_id'] ?? item['foodId'] ?? item['id'],
+          );
+          if (foodId.isNotEmpty) uniqueFoodIds.add(foodId);
+        }
+
+        for (final foodId in uniqueFoodIds) {
+          if (!foodIds.contains(foodId)) continue;
+          foodSum[foodId] = (foodSum[foodId] ?? 0.0) + rating;
+          foodCount[foodId] = (foodCount[foodId] ?? 0) + 1;
+        }
+      }
+    }
+
+    final foodAgg = <String, ({double avg, int count})>{};
+    for (final foodId in foodIds) {
+      final count = foodCount[foodId] ?? 0;
+      final sum = foodSum[foodId] ?? 0.0;
+      foodAgg[foodId] = (avg: count > 0 ? (sum / count) : 0.0, count: count);
+    }
+
+    return (
+      foodAgg: foodAgg,
+      storeAgg: (
+        avg: storeCount > 0 ? (storeSum / storeCount) : 0.0,
+        count: storeCount,
+      ),
+    );
+  }
+
+  Future<void> syncRatingsForStore(String storeId) async {
+    if (storeId.trim().isEmpty) return;
+    try {
+      final foodsSnap = await _firestore
+          .collection(_foodsCollection)
+          .where('store_id', isEqualTo: storeId)
+          .get();
+
+      final foodIds = foodsSnap.docs.map((d) => d.id).toSet();
+      final agg = await _computeFoodAggregatesFromReviewsForStore(
+        storeId,
+        foodIds,
+      );
+
+      final batch = _firestore.batch();
+
+      // Store aggregates
+      final storeRef = _firestore.collection('Users').doc(storeId);
+      batch.set(storeRef, <String, dynamic>{
+        'rating': agg.storeAgg.avg,
+        'avgRating': agg.storeAgg.avg,
+        'avg_rating': agg.storeAgg.avg,
+        'totalRatings': agg.storeAgg.count,
+        'total_ratings': agg.storeAgg.count,
+        'updated_at': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      for (final doc in foodsSnap.docs) {
+        final foodId = doc.id;
+        final a = agg.foodAgg[foodId];
+        if (a == null) continue;
+
+        batch.set(doc.reference, <String, dynamic>{
+          'avgRating': a.avg,
+          'avg_rating': a.avg,
+          'rating': a.avg,
+          'totalRatings': a.count,
+          'total_ratings': a.count,
+          'updated_at': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+
+      await batch.commit();
+    } catch (e) {
+      debugPrint('syncRatingsForStore failed: $e');
+    }
+  }
+
   static String getPublicImageUrl(String path) {
     if (path.isEmpty) {
       return '';
@@ -108,10 +253,34 @@ class MenuService {
   Future<List<FoodItem>> getAllFoods() async {
     try {
       final snapshot = await _firestore.collection(_foodsCollection).get();
-      return snapshot.docs.map((doc) {
+      final foods = snapshot.docs.map((doc) {
         final item = FoodItem.fromMap(doc.data(), docId: doc.id);
-        // Resolve image path to public URL
         return item.copyWith(image: getPublicImageUrl(item.image));
+      }).toList();
+
+      // Compute rating aggregates from source-of-truth reviews + orders.
+      final foodsByStore = <String, Set<String>>{};
+      for (final food in foods) {
+        foodsByStore
+            .putIfAbsent(food.storeId, () => <String>{})
+            .add(food.foodId);
+      }
+
+      final foodAgg = <String, ({double avg, int count})>{};
+      for (final entry in foodsByStore.entries) {
+        final storeId = entry.key;
+        final ids = entry.value;
+        final agg = await _computeFoodAggregatesFromReviewsForStore(
+          storeId,
+          ids,
+        );
+        foodAgg.addAll(agg.foodAgg);
+      }
+
+      return foods.map((food) {
+        final a = foodAgg[food.foodId];
+        if (a == null) return food;
+        return food.copyWith(avgRating: a.avg, totalRatings: a.count);
       }).toList();
     } catch (e) {
       debugPrint('Error fetching all foods: $e');

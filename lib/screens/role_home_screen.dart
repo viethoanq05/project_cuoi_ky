@@ -953,9 +953,15 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
       return null;
     }
 
+    final normalized =
+        trimmed.toLowerCase().contains('việt nam') ||
+            trimmed.toLowerCase().contains('vietnam')
+        ? trimmed
+        : '$trimmed, Việt Nam';
+
     try {
       final locations = await locationFromAddress(
-        trimmed,
+        normalized,
       ).timeout(const Duration(seconds: 8));
       if (locations.isEmpty) {
         return null;
@@ -979,9 +985,6 @@ class _RoleHomeScreenState extends State<RoleHomeScreen> {
     required String orderId,
     required String address,
   }) {
-    if (orderId.trim().isEmpty) {
-      return;
-    }
     if (_orderGeoCache.containsKey(orderId)) {
       return;
     }

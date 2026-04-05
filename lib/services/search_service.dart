@@ -14,6 +14,52 @@ class SearchService {
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  Future<Map<String, ({double avg, int count})>> _getStoreAggregatesFromReviews(
+    List<String> storeIds,
+  ) async {
+    if (storeIds.isEmpty) {
+      return <String, ({double avg, int count})>{};
+    }
+
+    final sums = <String, double>{};
+    final counts = <String, int>{};
+
+    const chunkSize = 10;
+    for (var start = 0; start < storeIds.length; start += chunkSize) {
+      final chunk = storeIds.sublist(
+        start,
+        (start + chunkSize).clamp(0, storeIds.length),
+      );
+
+      final snapshot = await _firestore
+          .collection('reviews')
+          .where('store_id', whereIn: chunk)
+          .get();
+
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final storeId = (data['store_id'] ?? '').toString().trim();
+        if (storeId.isEmpty) continue;
+        final ratingRaw = data['rating'];
+        final rating = ratingRaw is num
+            ? ratingRaw.toDouble()
+            : double.tryParse(ratingRaw?.toString() ?? '') ?? 0.0;
+        if (rating <= 0) continue;
+
+        sums[storeId] = (sums[storeId] ?? 0.0) + rating;
+        counts[storeId] = (counts[storeId] ?? 0) + 1;
+      }
+    }
+
+    final result = <String, ({double avg, int count})>{};
+    for (final storeId in storeIds) {
+      final count = counts[storeId] ?? 0;
+      final sum = sums[storeId] ?? 0.0;
+      result[storeId] = (avg: count > 0 ? (sum / count) : 0.0, count: count);
+    }
+    return result;
+  }
+
   // Lấy tên cửa hàng theo ID
   Future<String> getStoreNameById(String storeId) async {
     try {
@@ -37,8 +83,12 @@ class SearchService {
           .where('role', isEqualTo: 'Store')
           .get();
 
+      final storeIds = snapshot.docs.map((doc) => doc.id).toList();
+      final aggregates = await _getStoreAggregatesFromReviews(storeIds);
+
       return snapshot.docs.map((doc) {
         final data = doc.data();
+        final agg = aggregates[doc.id];
         return StoreInfo(
           storeId: doc.id,
           storeOwnerId: doc.id,
@@ -48,8 +98,8 @@ class SearchService {
           longitude: _parseLon(data['position']),
           address: data['address'] ?? '',
           phone: data['phone'] ?? '',
-          rating: _extractStoreRating(data),
-          totalRatings: _extractTotalRatings(data),
+          rating: agg == null ? _extractStoreRating(data) : agg.avg,
+          totalRatings: agg == null ? _extractTotalRatings(data) : agg.count,
           isOpen: data['isStoreOpen'] ?? true,
         );
       }).toList();
@@ -71,6 +121,9 @@ class SearchService {
           .where('role', isEqualTo: 'Store')
           .get();
 
+      final storeIds = snapshot.docs.map((doc) => doc.id).toList();
+      final aggregates = await _getStoreAggregatesFromReviews(storeIds);
+
       final stores = snapshot.docs
           .where((doc) {
             final data = doc.data();
@@ -79,6 +132,7 @@ class SearchService {
           })
           .map((doc) {
             final data = doc.data();
+            final agg = aggregates[doc.id];
             return StoreInfo(
               storeId: doc.id,
               storeOwnerId: doc.id,
@@ -88,8 +142,10 @@ class SearchService {
               longitude: _parseLon(data['position']),
               address: data['address'] ?? '',
               phone: data['phone'] ?? '',
-              rating: _extractStoreRating(data),
-              totalRatings: _extractTotalRatings(data),
+              rating: agg == null ? _extractStoreRating(data) : agg.avg,
+              totalRatings: agg == null
+                  ? _extractTotalRatings(data)
+                  : agg.count,
               isOpen: data['isStoreOpen'] ?? true,
             );
           })

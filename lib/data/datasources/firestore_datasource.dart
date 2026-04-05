@@ -289,15 +289,310 @@ class FirestoreDatasource {
         'created_at': DateTime.now().toIso8601String(),
       };
 
-      await _firebaseFirestore
-          .collection('reviews')
-          .doc(reviewId)
-          .set(reviewData);
+      double asDouble(dynamic value) {
+        if (value is num) return value.toDouble();
+        if (value is String) return double.tryParse(value.trim()) ?? 0.0;
+        return 0.0;
+      }
+
+      int asInt(dynamic value) {
+        if (value is int) return value;
+        if (value is num) return value.toInt();
+        if (value is String) return int.tryParse(value.trim()) ?? 0;
+        return 0;
+      }
+
+      String asTrimmedText(dynamic value) => value?.toString().trim() ?? '';
+
+      await _firebaseFirestore.runTransaction((transaction) async {
+        final reviewRef = _firebaseFirestore
+            .collection('reviews')
+            .doc(reviewId);
+        final orderRef = _firebaseFirestore.collection('Orders').doc(orderId);
+        final storeRef = _firebaseFirestore.collection('Users').doc(storeId);
+
+        // Firestore transactions require all reads to happen before any writes.
+        final existingReviewSnap = await transaction.get(reviewRef);
+        if (existingReviewSnap.exists) {
+          throw Exception('This order has already been reviewed');
+        }
+
+        final orderSnap = await transaction.get(orderRef);
+        if (!orderSnap.exists) {
+          throw Exception('Order not found');
+        }
+
+        final orderData = orderSnap.data() ?? <String, dynamic>{};
+        final existingReviewText = asTrimmedText(orderData['review']);
+        final existingRatingValue = asDouble(orderData['rating']);
+        if (existingRatingValue > 0 || existingReviewText.isNotEmpty) {
+          throw Exception('This order has already been reviewed');
+        }
+
+        final orderStoreId = asTrimmedText(
+          orderData['store_id'] ?? orderData['storeId'],
+        );
+        if (orderStoreId.isNotEmpty && orderStoreId != storeId) {
+          throw Exception('Invalid store for this order');
+        }
+
+        // Read store + all involved foods before writing.
+        final storeSnap = await transaction.get(storeRef);
+        final storeData = storeSnap.data() ?? <String, dynamic>{};
+
+        final rawItems = orderData['items'] ?? orderData['order_items'];
+        final items = rawItems is List ? rawItems : const [];
+        final uniqueFoodIds = <String>{};
+        for (final item in items) {
+          if (item is! Map) continue;
+          final foodId = asTrimmedText(
+            item['food_id'] ?? item['foodId'] ?? item['id'],
+          );
+          if (foodId.isNotEmpty) {
+            uniqueFoodIds.add(foodId);
+          }
+        }
+
+        final foodSnaps = <String, DocumentSnapshot<Map<String, dynamic>>>{};
+        for (final foodId in uniqueFoodIds) {
+          final foodRef = _firebaseFirestore.collection('Foods').doc(foodId);
+          foodSnaps[foodId] = await transaction.get(foodRef);
+        }
+
+        // ---- Writes (after all reads) ----
+        transaction.set(reviewRef, reviewData);
+
+        final orderUpdate = <String, dynamic>{
+          'rating': rating.toDouble(),
+          'review': comment,
+          'updated_at': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        };
+
+        transaction.set(orderRef, orderUpdate, SetOptions(merge: true));
+
+        // Mirror into Users/{customerId}/Orders and Users/{storeId}/Orders if present.
+        final customerId = asTrimmedText(
+          orderData['user_id'] ??
+              orderData['customer_id'] ??
+              orderData['customerId'],
+        );
+        if (customerId.isNotEmpty) {
+          final userOrderRef = _firebaseFirestore
+              .collection('Users')
+              .doc(customerId)
+              .collection('Orders')
+              .doc(orderId);
+          transaction.set(userOrderRef, orderUpdate, SetOptions(merge: true));
+        }
+
+        final storeOrderRef = _firebaseFirestore
+            .collection('Users')
+            .doc(storeId)
+            .collection('Orders')
+            .doc(orderId);
+        transaction.set(storeOrderRef, orderUpdate, SetOptions(merge: true));
+
+        // Update store aggregate rating.
+
+        Map<String, dynamic>? storeInfo;
+        final rawStoreInfo = storeData['store_info'] ?? storeData['storeInfo'];
+        if (rawStoreInfo is List &&
+            rawStoreInfo.isNotEmpty &&
+            rawStoreInfo.first is Map) {
+          storeInfo = Map<String, dynamic>.from(rawStoreInfo.first as Map);
+        } else if (rawStoreInfo is Map) {
+          storeInfo = Map<String, dynamic>.from(rawStoreInfo);
+        }
+
+        final prevStoreCount = asInt(
+          storeData['totalRatings'] ??
+              storeData['total_ratings'] ??
+              storeData['ratingCount'] ??
+              storeInfo?['totalRatings'] ??
+              storeInfo?['total_ratings'] ??
+              storeInfo?['ratingCount'],
+        );
+
+        final prevStoreAvgRaw =
+            storeData['avgRating'] ??
+            storeData['avg_rating'] ??
+            storeData['rating'] ??
+            storeInfo?['avgRating'] ??
+            storeInfo?['avg_rating'] ??
+            storeInfo?['rating'];
+        final prevStoreAvg = asDouble(prevStoreAvgRaw);
+
+        final nextStoreCount = prevStoreCount + 1;
+        final nextStoreAvg =
+            ((prevStoreAvg * prevStoreCount) + rating) / nextStoreCount;
+
+        transaction.set(storeRef, <String, dynamic>{
+          'rating': nextStoreAvg,
+          'avgRating': nextStoreAvg,
+          'avg_rating': nextStoreAvg,
+          'totalRatings': nextStoreCount,
+          'total_ratings': nextStoreCount,
+          'updated_at': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+
+        // Update each food's aggregate rating once per order.
+        for (final foodId in uniqueFoodIds) {
+          final foodSnap = foodSnaps[foodId];
+          if (foodSnap == null || !foodSnap.exists) {
+            continue;
+          }
+          final foodData = foodSnap.data() ?? <String, dynamic>{};
+          final prevFoodCount = asInt(
+            foodData['totalRatings'] ??
+                foodData['total_ratings'] ??
+                foodData['ratingCount'],
+          );
+          final prevFoodAvg = asDouble(
+            foodData['avgRating'] ??
+                foodData['avg_rating'] ??
+                foodData['rating'],
+          );
+
+          final nextFoodCount = prevFoodCount + 1;
+          final nextFoodAvg =
+              ((prevFoodAvg * prevFoodCount) + rating) / nextFoodCount;
+
+          final foodRef = _firebaseFirestore.collection('Foods').doc(foodId);
+          transaction.set(foodRef, <String, dynamic>{
+            'avgRating': nextFoodAvg,
+            'avg_rating': nextFoodAvg,
+            'rating': nextFoodAvg,
+            'totalRatings': nextFoodCount,
+            'total_ratings': nextFoodCount,
+            'updated_at': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        }
+      });
+
+      // Best-effort: rebuild aggregates from source-of-truth reviews so
+      // displayed stars/counts are always correct.
+      try {
+        await _syncAggregatesFromReviewsForStore(storeId);
+      } catch (_) {
+        // Ignore sync failures; the review itself has already been created.
+      }
 
       return ReviewModel.fromJson(reviewData);
     } catch (e) {
       rethrow;
     }
+  }
+
+  Iterable<List<T>> _chunks<T>(List<T> items, int size) sync* {
+    for (var start = 0; start < items.length; start += size) {
+      yield items.sublist(start, (start + size).clamp(0, items.length));
+    }
+  }
+
+  String _asText(dynamic value) => value?.toString().trim() ?? '';
+
+  double _asDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(_asText(value)) ?? 0.0;
+  }
+
+  Future<void> _syncAggregatesFromReviewsForStore(String storeId) async {
+    final trimmedStoreId = storeId.trim();
+    if (trimmedStoreId.isEmpty) return;
+
+    // 1) Read all reviews for this store
+    final reviewsSnap = await _firebaseFirestore
+        .collection('reviews')
+        .where('store_id', isEqualTo: trimmedStoreId)
+        .get();
+
+    final orderRating = <String, double>{};
+    double storeSum = 0.0;
+    var storeCount = 0;
+
+    for (final doc in reviewsSnap.docs) {
+      final data = doc.data();
+      final orderId = _asText(data['order_id']);
+      if (orderId.isEmpty) continue;
+      final rating = _asDouble(data['rating']);
+      if (rating <= 0) continue;
+      orderRating[orderId] = rating;
+      storeSum += rating;
+      storeCount += 1;
+    }
+
+    // 2) Load orders in chunks and aggregate per food
+    final foodSum = <String, double>{};
+    final foodCount = <String, int>{};
+
+    const chunkSize = 10;
+    for (final chunk in _chunks(orderRating.keys.toList(), chunkSize)) {
+      final ordersSnap = await _firebaseFirestore
+          .collection('Orders')
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get();
+
+      for (final orderDoc in ordersSnap.docs) {
+        final rating = orderRating[orderDoc.id] ?? 0.0;
+        if (rating <= 0) continue;
+
+        final orderData = orderDoc.data();
+        final rawItems = orderData['items'] ?? orderData['order_items'];
+        final items = rawItems is List ? rawItems : const [];
+
+        final uniqueFoodIds = <String>{};
+        for (final item in items) {
+          if (item is! Map) continue;
+          final foodId = _asText(
+            item['food_id'] ?? item['foodId'] ?? item['id'],
+          );
+          if (foodId.isNotEmpty) uniqueFoodIds.add(foodId);
+        }
+
+        for (final foodId in uniqueFoodIds) {
+          foodSum[foodId] = (foodSum[foodId] ?? 0.0) + rating;
+          foodCount[foodId] = (foodCount[foodId] ?? 0) + 1;
+        }
+      }
+    }
+
+    // 3) Write back aggregates
+    final batch = _firebaseFirestore.batch();
+
+    final storeAvg = storeCount > 0 ? (storeSum / storeCount) : 0.0;
+    final storeRef = _firebaseFirestore.collection('Users').doc(trimmedStoreId);
+    batch.set(storeRef, <String, dynamic>{
+      'rating': storeAvg,
+      'avgRating': storeAvg,
+      'avg_rating': storeAvg,
+      'totalRatings': storeCount,
+      'total_ratings': storeCount,
+      'updated_at': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    for (final entry in foodCount.entries) {
+      final foodId = entry.key;
+      final count = entry.value;
+      final sum = foodSum[foodId] ?? 0.0;
+      final avg = count > 0 ? (sum / count) : 0.0;
+
+      final foodRef = _firebaseFirestore.collection('Foods').doc(foodId);
+      batch.set(foodRef, <String, dynamic>{
+        'avgRating': avg,
+        'avg_rating': avg,
+        'rating': avg,
+        'totalRatings': count,
+        'total_ratings': count,
+        'updated_at': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+
+    await batch.commit();
   }
 
   Future<ReviewModel?> getReviewByOrderId(String orderId) async {

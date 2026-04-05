@@ -6,7 +6,7 @@ class ReviewRepository implements ReviewRepositoryInterface {
   final FirestoreDatasource _datasource;
 
   ReviewRepository({required FirestoreDatasource datasource})
-      : _datasource = datasource;
+    : _datasource = datasource;
 
   @override
   Future<bool> hasReviewedOrder(String orderId) async {
@@ -26,7 +26,9 @@ class ReviewRepository implements ReviewRepositoryInterface {
     required String comment,
   }) async {
     try {
-      final reviewId = DateTime.now().millisecondsSinceEpoch.toString();
+      // Use orderId as reviewId to guarantee 1 review per order and make
+      // review creation idempotent.
+      final reviewId = orderId;
 
       final model = await _datasource.createReview(
         reviewId: reviewId,

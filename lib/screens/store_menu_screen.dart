@@ -15,6 +15,18 @@ class StoreMenuScreen extends StatefulWidget {
 class _StoreMenuScreenState extends State<StoreMenuScreen> {
   MenuService get _menuService => context.read<MenuService>();
 
+  @override
+  void initState() {
+    super.initState();
+    // Best-effort: recompute rating aggregates from reviews.
+    Future.microtask(() {
+      final storeId = _menuService.currentStoreId;
+      if (storeId != null && storeId.trim().isNotEmpty) {
+        _menuService.syncRatingsForStore(storeId);
+      }
+    });
+  }
+
   Future<void> _createFood() async {
     await Navigator.of(
       context,

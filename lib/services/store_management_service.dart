@@ -373,8 +373,13 @@ class StoreManagementService {
   }) async {
     final trimmedAddress = address.trim();
     if (trimmedAddress.isNotEmpty) {
+      final normalized =
+          trimmedAddress.toLowerCase().contains('việt nam') ||
+              trimmedAddress.toLowerCase().contains('vietnam')
+          ? trimmedAddress
+          : '$trimmedAddress, Việt Nam';
       try {
-        final locations = await locationFromAddress(trimmedAddress);
+        final locations = await locationFromAddress(normalized);
         if (locations.isNotEmpty) {
           final first = locations.first;
           return _ResolvedLocation(first.latitude, first.longitude);

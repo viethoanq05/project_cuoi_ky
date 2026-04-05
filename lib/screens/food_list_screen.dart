@@ -30,6 +30,9 @@ class _FoodListScreenState extends State<FoodListScreen> {
     super.initState();
     _menuService = MenuService.instance;
     _cartService = CartService();
+
+    // Ensure displayed food ratings/counts match actual reviews.
+    Future.microtask(() => _menuService.syncRatingsForStore(widget.storeId));
   }
 
   @override
