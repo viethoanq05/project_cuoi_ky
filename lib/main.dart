@@ -7,21 +7,22 @@ import 'firebase_options.dart';
 import 'screens/login_screen.dart';
 import 'screens/role_home_screen.dart';
 import 'services/auth_service.dart';
+import 'services/cart_service.dart';
 import 'theme/app_theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const _BootstrapApp());
+  runApp(const BootstrapApp());
 }
 
-class _BootstrapApp extends StatefulWidget {
-  const _BootstrapApp();
+class BootstrapApp extends StatefulWidget {
+  const BootstrapApp({super.key});
 
   @override
-  State<_BootstrapApp> createState() => _BootstrapAppState();
+  State<BootstrapApp> createState() => _BootstrapAppState();
 }
 
-class _BootstrapAppState extends State<_BootstrapApp> {
+class _BootstrapAppState extends State<BootstrapApp> {
   late final Future<void> _initFuture = _init();
 
   Future<void> _init() async {
@@ -45,6 +46,7 @@ class _BootstrapAppState extends State<_BootstrapApp> {
     ).timeout(const Duration(seconds: 20));
 
     await AuthService.instance.init().timeout(const Duration(seconds: 10));
+    await CartService().loadFromPrefs().timeout(const Duration(seconds: 10));
   }
 
   @override
@@ -87,8 +89,13 @@ class _BootstrapAppState extends State<_BootstrapApp> {
           );
         }
 
-        return ChangeNotifierProvider<AuthService>.value(
-          value: AuthService.instance,
+        return MultiProvider(
+          providers: [
+            ChangeNotifierProvider<AuthService>.value(
+              value: AuthService.instance,
+            ),
+            ChangeNotifierProvider<CartService>.value(value: CartService()),
+          ],
           child: const MyApp(),
         );
       },
