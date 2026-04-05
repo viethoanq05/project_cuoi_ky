@@ -46,10 +46,16 @@ class MenuService {
     ) {
       final items = snapshot.docs
           .map((doc) => MenuCategory.fromMap(doc.data(), doc.id))
+          .where((category) => category.isActive)
           .toList();
-      items.sort(
-        (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
-      );
+
+      items.sort((a, b) {
+        final orderCompare = a.displayOrder.compareTo(b.displayOrder);
+        if (orderCompare != 0) {
+          return orderCompare;
+        }
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      });
       return items;
     });
   }
@@ -282,10 +288,17 @@ class MenuService {
 }
 
 class MenuCategory {
-  const MenuCategory({required this.id, required this.name});
+  const MenuCategory({
+    required this.id,
+    required this.name,
+    this.isActive = true,
+    this.displayOrder = 0,
+  });
 
   final String id;
   final String name;
+  final bool isActive;
+  final int displayOrder;
 
   String get categoryId => id;
 
@@ -298,9 +311,23 @@ class MenuCategory {
 
     final resolvedId = _asText(map['category_id']).isNotEmpty
         ? _asText(map['category_id'])
-        : (_asText(map['id']).isNotEmpty ? _asText(map['id']) : docId);
+        : (_asText(map['categoryId']).isNotEmpty
+              ? _asText(map['categoryId'])
+              : docId);
 
-    return MenuCategory(id: resolvedId, name: resolvedName);
+    final active =
+        map['isActive'] as bool? ?? map['is_active'] as bool? ?? true;
+    final orderRaw = map['displayOrder'] ?? map['display_order'] ?? 0;
+    final displayOrder = orderRaw is num
+        ? orderRaw.toInt()
+        : int.tryParse(orderRaw.toString()) ?? 0;
+
+    return MenuCategory(
+      id: resolvedId,
+      name: resolvedName,
+      isActive: active,
+      displayOrder: displayOrder,
+    );
   }
 
   static String _asText(dynamic value) {
