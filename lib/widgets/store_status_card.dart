@@ -16,7 +16,7 @@ class StoreStatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusText = isOpen ? 'Dang mo cua' : 'Dang dong cua';
+    final statusText = isOpen ? 'Đang mở cửa' : 'Đang đóng cửa';
     final statusColor = isOpen ? AppColors.success : AppColors.danger;
     final statusIcon = isOpen
         ? Icons.storefront_rounded
@@ -42,7 +42,7 @@ class StoreStatusCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Trang thai cua hang',
+                    'Trạng thái cửa hàng',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 4),

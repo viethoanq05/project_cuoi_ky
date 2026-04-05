@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../models/user_role.dart';
 import '../services/auth_service.dart';
 
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key, required this.authService});
-
-  final AuthService authService;
+  const RegisterScreen({super.key});
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -37,7 +36,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _isLoading = true;
     });
 
-    final errorMessage = await widget.authService.register(
+    final authService = context.read<AuthService>();
+    final errorMessage = await authService.register(
       userName: _userNameController.text,
       email: _emailController.text,
       password: _passwordController.text,

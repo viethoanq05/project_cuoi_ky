@@ -15,16 +15,21 @@ service cloud.firestore {
         : null;
     }
 
+    function currentRoleLower() {
+      let role = currentRole();
+      return role is string ? role.lower() : '';
+    }
+
     function isDriver() {
-      return currentRole() == 'Driver';
+      return currentRoleLower() == 'driver';
     }
 
     function isStore() {
-      return currentRole() == 'Store';
+      return currentRoleLower() == 'store';
     }
 
     function isCustomer() {
-      return currentRole() == 'Customer';
+      return currentRoleLower() == 'customer';
     }
 
     function isOwner(uid) {
@@ -32,7 +37,7 @@ service cloud.firestore {
     }
 
     function isValidRole(role) {
-      return role in ['Customer', 'Store', 'Driver'];
+      return role in ['Customer', 'Store', 'Driver', 'customer', 'store', 'driver'];
     }
 
     function hasCoreFields(data, uid) {
@@ -60,6 +65,34 @@ service cloud.firestore {
         && storeInfo[0] is map
         && storeInfo[0].is_open is bool
         && storeInfo[0].rating is number;
+    }
+
+    function canOwnerPatchStoreProfile(uid) {
+      return isOwner(uid)
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'fullName',
+          'phone',
+          'address',
+          'store_name',
+          'opening_hours',
+          'latitude',
+          'longitude',
+          'position',
+          'store_info',
+          'updated_at',
+          'updatedAt'
+        ])
+        && (!('fullName' in request.resource.data) || request.resource.data.fullName is string)
+        && (!('phone' in request.resource.data) || request.resource.data.phone is string)
+        && (!('address' in request.resource.data) || request.resource.data.address is string)
+        && (!('store_name' in request.resource.data) || request.resource.data.store_name is string)
+        && (!('opening_hours' in request.resource.data) || request.resource.data.opening_hours is string)
+        && (!('latitude' in request.resource.data) || request.resource.data.latitude is number)
+        && (!('longitude' in request.resource.data) || request.resource.data.longitude is number)
+        && (!('position' in request.resource.data) || request.resource.data.position is string)
+        && (!('updated_at' in request.resource.data) || request.resource.data.updated_at is timestamp)
+        && (!('updatedAt' in request.resource.data) || request.resource.data.updatedAt is timestamp)
+        && (!('store_info' in request.resource.data) || hasValidStoreInfo(request.resource.data.store_info));
     }
 
     function isStoreUser(uid) {
@@ -95,8 +128,11 @@ service cloud.firestore {
         && hasValidRoleInfo(request.resource.data);
 
       allow update: if isOwner(uid)
-        && hasCoreFields(request.resource.data, uid)
-        && hasValidRoleInfo(request.resource.data);
+        && (
+          (hasCoreFields(request.resource.data, uid)
+            && hasValidRoleInfo(request.resource.data))
+          || canOwnerPatchStoreProfile(uid)
+        );
 
       allow delete: if false;
     }
@@ -206,15 +242,64 @@ service cloud.firestore {
           && (!('updated_at' in request.resource.data) || request.resource.data.updated_at is timestamp);
       }
 
+      function canStoreUpdateOrderStatus() {
+        let next = requestedStatus(request.resource.data);
+        return isStore()
+          && ('store_id' in resource.data)
+          && resource.data.store_id == request.auth.uid
+          && ('store_id' in request.resource.data)
+          && request.resource.data.store_id == request.auth.uid
+          && (next in ['pending', 'preparing', 'delivering', 'completed', 'cancelled'])
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'status',
+            'order_status',
+            'updated_at',
+            'updatedAt'
+          ])
+          && (!('updated_at' in request.resource.data) || request.resource.data.updated_at is timestamp)
+          && (!('updatedAt' in request.resource.data) || request.resource.data.updatedAt is timestamp);
+      }
+
       allow read: if signedIn() && (canDriverSee(resource.data) || canStoreSee(resource.data) || canCustomerSee(resource.data));
 
       // Customer/store create/update flows are not implemented in code yet.
       // Keep create denied by default.
       allow create: if false;
 
-      // Allow only the driver-accept transition on finding orders.
-      allow update: if signedIn() && canDriverAcceptOrder();
+      // Allow driver accept flow and store status updates for own orders.
+      allow update: if signedIn() && (canDriverAcceptOrder() || canStoreUpdateOrderStatus());
 
+      allow delete: if false;
+    }
+
+    match /Reviews/{reviewId} {
+      function canStoreSeeReview(review) {
+        return isStore() && ('store_id' in review) && review.store_id == request.auth.uid;
+      }
+
+      function canStoreReplyReview() {
+        return isStore()
+          && ('store_id' in resource.data)
+          && resource.data.store_id == request.auth.uid
+          && ('store_id' in request.resource.data)
+          && request.resource.data.store_id == request.auth.uid
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'owner_reply',
+            'ownerReply',
+            'store_reply',
+            'reply',
+            'owner_replied_at',
+            'updated_at',
+            'updatedAt'
+          ])
+          && (!('owner_replied_at' in request.resource.data) || request.resource.data.owner_replied_at is timestamp)
+          && (!('updated_at' in request.resource.data) || request.resource.data.updated_at is timestamp)
+          && (!('updatedAt' in request.resource.data) || request.resource.data.updatedAt is timestamp);
+      }
+
+      allow read: if signedIn() && canStoreSeeReview(resource.data);
+      allow create: if false;
+      allow update: if signedIn() && canStoreReplyReview();
       allow delete: if false;
     }
   }

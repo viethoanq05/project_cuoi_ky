@@ -21,6 +21,7 @@ import 'screens/login_screen.dart';
 import 'screens/role_home_screen.dart';
 import 'services/auth_service.dart';
 import 'services/cart_service.dart';
+import 'services/menu_service.dart';
 import 'services/supabase_config.dart';
 import 'theme/app_theme.dart';
 
@@ -158,6 +159,7 @@ class _BootstrapAppState extends State<BootstrapApp> {
             ChangeNotifierProvider<AuthService>.value(
               value: AuthService.instance,
             ),
+            Provider<MenuService>.value(value: MenuService.instance),
             ChangeNotifierProvider<CartProvider>(create: (_) => CartProvider()),
             ChangeNotifierProvider<UserProfileProvider>(
               create: (_) =>
@@ -201,8 +203,8 @@ class MyApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light,
           home: authService.currentUser == null || authService.isRegistering
-              ? LoginScreen(authService: authService)
-              : RoleHomeScreen(authService: authService),
+              ? const LoginScreen()
+              : const RoleHomeScreen(),
         );
       },
     );

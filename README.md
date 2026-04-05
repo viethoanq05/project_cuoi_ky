@@ -213,4 +213,8 @@ flutter run -d emulator-5554 `
   --dart-define=SUPABASE_STORAGE_BUCKET=food-images
 ```
 
+Neu chay trong VS Code voi launch config `Flutter Debug (Supabase)`, tao file `supabase.dev.json`
+tu file mau `supabase.dev.json.example` va dien gia tri that. File `supabase.dev.json`
+duoc bo qua trong git de tranh lo key.
+
 Sau khi upload thanh cong, URL anh duoc luu vao Firestore (`Foods.image`) va se tu dong hien thi o man hinh menu.
