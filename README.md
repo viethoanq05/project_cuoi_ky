@@ -1,172 +1,97 @@
-# project_cuoi_ky
+# Project Cuối Kỳ — Food Ordering & Delivery App (Flutter)
 
-Ung dung Flutter co dang ky/dang nhap + Firebase Auth + Firestore + Google Maps.
+Ứng dụng đặt món và giao hàng, hỗ trợ 3 vai trò: **Khách hàng**, **Cửa hàng**, **Tài xế**.
+Backend sử dụng **Firebase Auth + Cloud Firestore**, lưu ảnh bằng **Supabase Storage**, bản đồ dùng **OpenStreetMap (flutter_map)**.
 
-README nay huong dan chi tiet cach cau hinh Google Maps va vi tri hien tai
-de map hien thi duoc tren Android.
+## Tính năng
 
-## 1) Dien Google Maps API key vao project
+### Khách hàng
 
-Mo file:
+- Đăng ký/đăng nhập.
+- Xem danh sách cửa hàng, món ăn, danh mục; tìm kiếm & lọc.
+- Gợi ý theo **khoảng cách** và **thời tiết**.
+- Giỏ hàng, đặt hàng **ngay** hoặc **đặt trước** (scheduled/pre-order).
+- Thanh toán: **COD** hoặc **Ví nội bộ**.
+- Theo dõi trạng thái đơn theo thời gian thực; đánh giá đơn hàng.
 
-- `android/app/src/main/res/values/google_maps_api.xml`
+### Cửa hàng
 
-Sua gia tri key:
+- Quản lý menu: tạo/sửa/xóa món, bật/tắt tình trạng bán.
+- Thêm món: chỉ chọn **size** khi món là **đồ uống**.
+- Quản lý đơn: có nút **Nhận đơn** cho đơn `pending` → chuyển sang `finding_driver` (hệ thống tìm tài xế).
+- Tab quản lý: thống kê, đơn hàng, đánh giá, hồ sơ.
 
-```xml
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-	 <string name="google_maps_api_key">AIzaSyYOUR_REAL_KEY_HERE</string>
-</resources>
+### Tài xế
+
+- Bật/tắt trạng thái online nhận đơn.
+- Xem đơn gần khu vực hoạt động, nhận đơn khi đơn đang ở trạng thái `finding_driver`.
+- Xem đơn đang giao, xác nhận hoàn thành giao hàng.
+- Upload **ảnh minh chứng** giao hàng; tự động cộng tiền vào ví và lưu lịch sử giao dịch.
+
+## Công nghệ
+
+- Flutter (Dart SDK theo `pubspec.yaml`)
+- State management: Provider
+- Firebase: `firebase_core`, `firebase_auth`, `cloud_firestore`
+- Bản đồ & vị trí: `flutter_map` (OpenStreetMap), `geolocator`, `geocoding`, `latlong2`
+- Upload ảnh: `image_picker`
+- Storage ảnh: `supabase_flutter`
+- Lịch hẹn (đặt trước): `add_2_calendar`
+
+## Cấu trúc thư mục (rút gọn)
+
+```text
+lib/
+  screens/        UI theo vai trò + luồng đặt hàng
+  services/       Tầng dịch vụ (Auth/Order/Menu/...)
+  models/         Model dữ liệu (Order/Food/User/...)
+  providers/      Provider state (cart, checkout, tracking, ...)
+  widgets/        Widget dùng lại
 ```
 
-Luu y:
+## Yêu cầu
 
-- Khong them dau ngoac kep quanh key.
-- Khong de khoang trang thua o dau/cuoi key.
+- Flutter SDK (khuyến nghị Flutter stable mới, tương thích Dart `^3.11.1`)
+- Android Studio/SDK hoặc thiết bị thật
+- Tài khoản Firebase + dự án Supabase (Storage)
 
-## 2) Bat API tren Google Cloud
+## Cấu hình Firebase
 
-Vao Google Cloud Console:
+1. Cài FlutterFire CLI (nếu cần):
 
-1. Chon dung project dang dung cho Firebase.
-2. Vao `APIs & Services` -> `Library`.
-3. Bat cac API sau:
-   - `Maps SDK for Android`
-     Ung dung Flutter co dang ky/dang nhap + Firebase Auth + Firestore + OpenStreetMap.
-
-README nay huong dan chi tiet cach cau hinh vi tri hien tai
-
-## 3) Cau hinh API key restrictions (quan trong)
-
-## 1) Khong can Google Maps API key
-
-Vao `APIs & Services` -> `Credentials` -> chon API key dang dung.
-Project da chuyen sang OpenStreetMap (OSM), nen:
-
-### 3.1 Application restrictions
-
-- Khong can tao API key Google Maps
-- Khong can bat Maps SDK for Android
-- Khong can cau hinh SHA-1 cho Google Maps key
-
-1. Chon `Android apps`.
-
-## 2) Cac package dang dung cho map + vi tri
-
-Trong `pubspec.yaml`:
-
-- `flutter_map`
-- `latlong2`
-- `geolocator`
-- `geocoding`
-
-## 3) Android permissions can co
-
-File: `android/app/src/main/AndroidManifest.xml`
-
-Can co cac permission:
-
-- `com.example.project_cuoi_ky`
-  <uses-permission android:name="android.permission.INTERNET"/>
-  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
-
-1. Chon `Restrict key`.
-
-## 4) Chay app
-
-- `Maps SDK for Android`
-
-```powershell
-flutter clean
-flutter pub get
-flutter run
+```bash
+dart pub global activate flutterfire_cli
 ```
 
-## 5) Luong lay vi tri hien tai
+2. Kết nối Firebase cho dự án:
 
-App se:
+```bash
+flutterfire configure
+```
 
-1. Xin quyen vi tri tren thiet bi
-2. Lay GPS hien tai bang `geolocator`
-3. Reverse geocoding thanh dia chi bang `geocoding`
-4. Hien marker tren OpenStreetMap bang `flutter_map`
-5. Luu dia chi + toa do vao Firestore user profile
+3. Kiểm tra các file đã có trong repo:
 
-## 6) Loi thuong gap va cach xu ly
+- `android/app/google-services.json`
+- `lib/firebase_options.dart`
 
-### Loi: khong xin duoc quyen vi tri
+Ghi chú:
 
-flutter clean
-Kiem tra:
-flutter run
+- iOS có thể cần bổ sung `GoogleService-Info.plist` (nếu build iOS).
+- Firestore rules tham khảo trong `firestore.rules` (cần chỉnh theo schema/role khi triển khai).
 
-1. Da cap quyen Location cho app trong Settings chua
-2. GPS tren may/emulator da bat chua
+## Cấu hình Supabase Storage (bắt buộc)
 
-### Loi: map khong tai tile OSM
+App yêu cầu biến môi trường Supabase khi khởi động (được đọc từ `--dart-define`).
 
-Kiem tra:
+### 1) Tạo bucket
 
-- Location permissions (`ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION`)
+- Tạo bucket Storage (mặc định khuyến nghị): `food-images`.
 
-1. Emulator/phone co internet khong
-2. Co bi VPN/proxy/firewall chan domain tile OSM khong
+### 2) Policy (tham khảo cho môi trường dev)
 
-### Loi: `permission-denied` khi ghi Firestore
+App upload từ client bằng `SUPABASE_ANON_KEY`, vì vậy cần policy phù hợp.
 
-Do Firestore Rules chan ghi/doc. Can cap nhat rules dung voi schema user cua app.
-
-### Loi: `Unable to establish connection on channel`
-
-2. Da bat `Maps SDK for Android` chua.
-   Thu:
-
-### Loi: `Unable to establish connection on channel`
-
-1. Kiem tra internet trong emulator
-2. Cold boot lai emulator
-3. Chay lai `flutter clean ; flutter pub get ; flutter run`
-   Thu:
-
-## 7) Ghi chu bao mat
-
-1. Kiem tra emulator co Internet (mo browser trong emulator).
-
-- Khong luu du lieu nhay cam tren client neu khong can thiet
-- Firestore rules phai gioi han doc/ghi theo role va owner
-  Do Firestore Rules chan ghi/ doc. Can cap nhat rules dung voi schema user cua app.
-
-- Khong commit API key that vao public repo.
-
-## 8) Supabase Storage (luu anh mon an)
-
-Project nay dung:
-
-- Firebase (Auth + Firestore) de luu du lieu (Users/Orders/Foods/Categories...)
-- Supabase chi de luu file anh (Storage). Link anh (URL) se duoc luu vao Firestore (field `Foods.image`) va duoc hien thi bang `Image.network(...)`.
-
-### 8.1 Tao bucket
-
-Trong Supabase Dashboard:
-
-1. Tao project Supabase.
-2. Vao `Storage` -> `Buckets` -> tao bucket (mac dinh code dang dung: `food-images`).
-3. Neu muon dung `getPublicUrl(...)` (nhu code hien tai) thi set bucket la public.
-
-### 8.2 Policy (quan trong)
-
-Vi app dang upload tu client bang `SUPABASE_ANON_KEY`, ban can policy cho `storage.objects`.
-
-Lua chon A (de test nhanh, it an toan hon cho production):
-
-- Cho phep doc public (select) cho anh trong bucket `food-images`.
-- Cho phep upload (insert/update) tu client: can policy cho role `anon` hoac phai tich hop Supabase Auth / backend upload.
-
-Goi y policy (tham khao) de test nhanh:
-
-1. Public read:
+Public read:
 
 ```sql
 create policy "public read food images"
@@ -176,7 +101,7 @@ to anon
 using (bucket_id = 'food-images');
 ```
 
-2. Allow upload into `foods/` folder (de test nhanh):
+Cho phép upload vào thư mục `foods/` và `proofimages/`:
 
 ```sql
 create policy "anon upload food images"
@@ -185,18 +110,62 @@ for insert
 to anon
 with check (
   bucket_id = 'food-images'
-  and (storage.foldername(name))[1] = 'foods'
+  and (storage.foldername(name))[1] in ('foods', 'proofimages')
 );
 ```
 
-Luu y: Neu mo quyen upload cho `anon` thi ai co anon key deu co the upload. De an toan cho production, nen:
+Lưu ý bảo mật: policy cho `anon` chỉ nên dùng để demo/dev. Khi triển khai production, nên dùng Supabase Auth hoặc upload qua backend.
 
-- Tich hop Supabase Auth (role `authenticated`) va chi cho authenticated upload, hoac
-- Upload qua server/Cloud Function (dung service role key, KHONG de tren client).
+### 3) Biến môi trường cần thiết
 
-### 8.3 Chay app voi bien moi truong Supabase
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+- (tùy chọn) `SUPABASE_STORAGE_BUCKET` (mặc định có thể dùng `food-images`)
 
-Code doc cac bien qua `--dart-define`:
+## Bản đồ & vị trí (OpenStreetMap)
+
+Project dùng **OpenStreetMap** thông qua `flutter_map` nên **không cần** Google Maps API key.
+
+### Android permissions
+
+Trong `android/app/src/main/AndroidManifest.xml` đảm bảo có:
+
+```xml
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+```
+
+## Chạy ứng dụng
+
+```bash
+flutter pub get
+flutter run \
+  --dart-define=SUPABASE_URL=YOUR_SUPABASE_URL \
+  --dart-define=SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY \
+  --dart-define=SUPABASE_STORAGE_BUCKET=food-images
+```
+
+## Troubleshooting
+
+### 1) Báo lỗi “Supabase chưa được cấu hình”
+
+- Chạy lại với `--dart-define=SUPABASE_URL=...` và `--dart-define=SUPABASE_ANON_KEY=...`.
+
+### 2) Không lấy được vị trí
+
+- Kiểm tra quyền Location trên thiết bị/emulator.
+- Bật GPS và đảm bảo có internet.
+
+### 3) `permission-denied` khi đọc/ghi Firestore
+
+- Firestore Rules đang chặn. Cần cập nhật `firestore.rules` theo schema và phân quyền.
+
+## Ghi chú bảo mật
+
+- Không commit key thật lên repo public.
+- Giới hạn Firestore rules theo role/owner.
+- Không mở quyền upload `anon` cho production.
 
 Luu y: Supabase duoc khoi tao ngay khi mo app. Neu thieu `SUPABASE_URL`/`SUPABASE_ANON_KEY` thi app se bao loi va dung de tranh chay sai cau hinh.
 
